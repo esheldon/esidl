@@ -1,0 +1,8 @@
+run_combine_stripe_runs - for list of stripe (internal) calls
+			  combine_stripe_runs
+combine_stripe_runs - for input stripe, finds the runs and makes the source
+		      catalogs for that run (can turn this off) and runs
+		      combine_stripe
+combine_stripe - combines all the input runs into one single stripe
+
+( ../combine_stripes/combine_stripes.pro - combine multiple stripe files )

@@ -1,0 +1,5 @@
+envPrepend(IDL_PATH,+${PRODUCT_DIR}/pro)
+envPrepend(IDL_DLM_PATH,${PRODUCT_DIR}/src/DLM)
+# Need this because for DLMs IDL doesn't include itself in the path if 
+# you set it!  This is inconsistent with the behavior of IDL_PATH
+envAppend(IDL_DLM_PATH,"<IDL_DEFAULT>")

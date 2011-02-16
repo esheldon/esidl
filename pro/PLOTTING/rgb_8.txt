@@ -1,0 +1,25 @@
+176 196 222   lightsteelblue
+135 206 235   skyblue
+ 47  79  79   darkslategrey
+112 128 144   slategrey
+173 216 230   lightblue
+ 25  25 112   midnightblue
+  0   0 128   navyblue
+ 65 105 225   royalblue
+ 30 144 255   dodgerblue
+  0   0 139   darkblue
+ 64 224 208   turquoise
+  0 100   0   darkgreen
+ 46 139  87   seagreen
+ 34 139  34   forestgreen
+144 238 144   lightgreen
+160  82  45   sienna
+178  34  34   firebrick
+250 128 114   salmon
+255 165   0   orange
+255  69   0   orangered
+255 105 180   hotpink
+255  20 147   deeppink
+238 130 238   violet
+139   0   0   darkred
+160  32 240   purple

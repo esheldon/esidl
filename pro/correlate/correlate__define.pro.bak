@@ -1,0 +1,4101 @@
+
+FUNCTION correlate::init, par
+
+  IF n_elements(par) EQ 0 THEN BEGIN 
+      message,'-Syntax: co = obj_new("correlate", par)',/inf
+      return, 0
+  ENDIF 
+  newpar = self->add2par(par)
+  help,newpar,/str, output=helpout
+  FOR i=0,n_elements(helpout)-1 DO print,helpout[i]
+
+  self.par_struct = ptr_new(newpar)
+  return, 1
+END 
+
+
+
+
+
+
+
+
+
+
+
+; Add the bin information to the parameter structure
+FUNCTION correlate::add2par, par
+
+  ;; add the radial bins
+  logRmin = alog10(par.rmin)
+  logRmax = alog10(par.rmax)
+  logBinsize = ( logRmax - logRmin )/par.nrad
+
+  radbins_min = dblarr(par.nrad)
+  radbins_max = dblarr(par.nrad)
+  area = dblarr(par.nrad)
+
+  FOR i=0L, par.nrad-1 DO BEGIN 
+      radbins_min[i] = 10.0^(logRmin + i*logBinsize)
+      radbins_max[i] = 10.0^(logRmin + (i+1)*logBinsize)
+      area[i] = !pi*(radbins_max[i]^2 - radbins_min[i]^2)
+  ENDFOR 
+
+  ;; add the lum bins
+  loglbins_min = dblarr(par.nlum)
+  loglbins_max = dblarr(par.nlum)
+  loglBinsize = (par.loglmax - par.loglmin)/par.nlum
+
+  FOR i=0L,par.nlum-1 DO BEGIN 
+      loglbins_min[i] = par.loglmin + i*loglBinsize
+      loglbins_max[i] = par.loglmin + (i+1)*loglBinsize
+  ENDFOR 
+
+  ;; add the gmr bins
+  kgmrbins_min = dblarr(par.nlum)
+  kgmrbins_max = dblarr(par.nlum)
+  kgmrBinsize = (par.kgmrmax - par.kgmrmin)/par.nkgmr
+
+  FOR i=0L,par.nlum-1 DO BEGIN 
+      kgmrbins_min[i] = par.kgmrmin + i*kgmrBinsize
+      kgmrbins_max[i] = par.kgmrmin + (i+1)*kgmrBinsize
+  ENDFOR 
+
+
+  newpar = create_struct(par, $
+                         'radbins_min', radbins_min, $
+                         'radbins_max', radbins_max, $
+                         'area', area, $
+                         'loglbins_min', loglbins_min, $
+                         'loglbins_max', loglbins_max, $
+                         'kgmrbins_min', kgmrbins_min, $
+                         'kgmrbins_max', kgmrbins_max)
+  return, newpar
+
+END 
+FUNCTION correlate::par_struct
+  return, *self.par_struct
+END 
+
+
+
+; area of this catalog. Run stand alone
+; calculate_area code in sdsspixIDL/app
+; note, dr406 now uses the "BOUND" mask
+FUNCTION correlate::area, catalog, radians=radians
+  CASE catalog OF
+      'dr4plus01': area = 7398.233579d
+      ELSE: message,'Do not have an area for catalog '+ntostr(catalog)
+  END 
+  IF keyword_set(radians) THEN BEGIN 
+      area = area * (!dpi/180d)^2
+  ENDIF 
+  return, area
+END 
+
+FUNCTION correlate::secondary_density, secondary_randnum=secondary_randnum
+
+  par = self->par_struct()
+
+
+  IF n_elements(secondary_randnum) EQ 0 THEN BEGIN 
+      area = self->area(par.DSsample,/radians)
+      secondary_file = self->corrfile('secondary','input')
+  ENDIF ELSE BEGIN 
+      area = self->area(par.RSsample,/radians)
+      secondary_file = self->corrfile('secondary_random','input', $
+                                      secondary_randnum=secondary_randnum)
+  ENDELSE 
+  hdr = read_idlheader(secondary_file)
+  number = hdr.nrows
+  density = number/area
+
+  return, density
+END 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; File related methods
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FUNCTION correlate::corrdir_base
+  return,expand_tilde(esheldon_config('correlate_dir'))
+END 
+
+; Info each directory type
+FUNCTION correlate::corrdir_info
+
+  ddtypes = ['par','script','pbs','output','combined','corrected','jackknife','matchdr','matchrd','matchrr']
+  par = self->par_struct()
+
+  info = $
+    { $
+      kcorr:            {basedir: 'input',  dirtypes: 'input', sub: 0, sample: par.Ksample}, $
+      $
+      primary:          {basedir: 'input',  dirtypes: 'input', sub: 0, sample: par.DPsample}, $
+      primary_random:   {basedir: 'input',  dirtypes: 'input', sub: 0, sample: par.RPsample}, $
+      secondary:        {basedir: 'input',  dirtypes: ['input','htm'], sub: 0, sample: par.DSsample}, $
+      secondary_random: {basedir: 'input',  dirtypes: ['input','htm'], sub: 0, sample: par.RSsample}, $
+      $
+      dd:               {basedir: 'output', dirtypes:  ddtypes, sub: 1, sample: par.psample + '_'+par.DPsample +'_'+par.DSsample}, $
+      dr:               {basedir: 'output', dirtypes: ['par','script','pbs','output'], sub: 0, sample: par.psample+'_'+par.DPsample +'_'+par.RSsample}, $
+      rd:               {basedir: 'output', dirtypes: ['par','script','pbs','output','rzsub'], sub: 0, sample: par.psample+'_'+par.RPsample +'_'+par.DSsample}, $
+      rr:               {basedir: 'output', dirtypes: ['par','script','pbs','output','rzsub'], sub: 0, sample: par.psample+'_'+par.RPsample +'_'+par.RSsample}  $
+    }
+
+
+
+;  info = $
+;    { $
+;      kcorr:            {basedir: 'input',  dirtypes: 'input', sub: 0, sample: par.Ksample}, $
+;      $
+;      primary:          {basedir: 'input',  dirtypes: 'input', sub: 0, sample: par.DPsample}, $
+;      primary_random:   {basedir: 'input',  dirtypes: 'input', sub: 0, sample: par.RPsample}, $
+;      secondary:        {basedir: 'input',  dirtypes: ['input','htm'], sub: 0, sample: par.DSsample}, $
+;      secondary_random: {basedir: 'input',  dirtypes: ['input','htm'], sub: 0, sample: par.RSsample}, $
+;      $
+;      dd:               {basedir: 'output', dirtypes:  ddtypes, sub: 1, sample: par.DPsample +'_'+par.DSsample}, $
+;      dr:               {basedir: 'output', dirtypes: ['par','script','pbs','output'], sub: 0, sample: par.DPsample +'_'+par.RSsample}, $
+;      rd:               {basedir: 'output', dirtypes: ['par','script','pbs','output'], sub: 0, sample: par.RPsample +'_'+par.DSsample}, $
+;      rr:               {basedir: 'output', dirtypes: ['par','script','pbs','output'], sub: 0, sample: par.RPsample +'_'+par.RSsample}  $
+;    }
+
+  return, info
+END 
+
+FUNCTION correlate::randinfo, type, dtype
+  st = {prand:0, srand: 0}
+  ltype = strlowcase(type)
+  ldtype = strlowcase(dtype)
+  tst = strlowcase(type)+'-'+strlowcase(dtype)
+
+  CASE ltype OF
+      'primary_random': st.prand=1
+      'secondary_random': st.srand=1
+;      'dd': BEGIN 
+;          CASE ldtype OF
+;              'matchrd': st.prand = 1
+;              'matchdr': st.srand = 1
+;              'matchrr': BEGIN 
+;                  st.prand = 1
+;                  st.srand = 1
+;              END 
+;              ELSE:
+;          ENDCASE 
+;      END 
+      'rd': st.prand = 1
+      'dr': st.srand = 1
+      'rr': BEGIN 
+          st.prand = 1
+          st.srand = 1
+      END 
+      ELSE: 
+  ENDCASE 
+
+  return, st
+      
+END 
+
+FUNCTION correlate::rzsub_info
+  par = self->par_struct()
+  CASE par.rzsample OF
+      'rz01': BEGIN 
+          ;; Note: histogram will give 41 bins for binsize=0.005, but
+          ;; will only take the first 40.
+          return, {rzmin: 0.1, rzmax: 0.3, rzstep: 0.005, nrz: 40}
+      END 
+      ELSE: message,'Unsupported rzsample: '+par.rzsample
+  ENDCASE 
+END 
+
+
+FUNCTION correlate::sample, type, info=info
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: sample = obj->sample(type, info=)'
+      print
+      message,'halting'
+  ENDIF 
+  IF self->corrdir_type_exists(type, info=info) THEN BEGIN 
+      return,info.sample
+  ENDIF ELSE BEGIN 
+      message,'No matching type: "'+strlowcase(type)+'"',/inf
+      return,''
+  ENDELSE 
+END 
+
+
+
+
+FUNCTION correlate::corrdir_type_exists, type, info=info
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: if co->corrdir_type_exists(type,info=info) then ...'
+      print
+      message,'Halting'
+  ENDIF 
+  corrdir_info = self->corrdir_info()
+  IF tag_exist(corrdir_info, type, ind=ind) THEN BEGIN 
+      info = corrdir_info.(ind)
+      return, 1
+  ENDIF ELSE BEGIN 
+      return, 0
+  ENDELSE 
+END 
+
+FUNCTION correlate::corrdir_dirtype_exists, type, dtype, info=info
+
+  IF n_elements(type) EQ 0 OR n_elements(dtype) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: if co->corrdir_dirtype_exists(type,dtype,info=) then ...'
+      print
+      message,'Halting'
+  ENDIF 
+  IF self->corrdir_type_exists(type, info=info) THEN BEGIN 
+      w=where(info.dirtypes EQ strlowcase(dtype), nw)
+      IF nw EQ 0 THEN return,0 ELSE return,1
+  ENDIF ELSE BEGIN 
+      return,0
+  ENDELSE 
+END 
+
+FUNCTION correlate::corrdir_dirtype_hassub, type, info=info
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: if co->corrdir_dirtype_hassub(type,info=) then ...'
+      print
+      message,'Halting'
+  ENDIF 
+  IF self->corrdir_type_exists(type, info=info) THEN BEGIN 
+      return,info.sub
+  ENDIF ELSE BEGIN 
+      return,0
+  ENDELSE 
+END 
+
+
+FUNCTION correlate::corrdir, type, dtype=dtype, subtype=subtype, createdir=createdir
+
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: dir=co->corrdir(type, dtype=, subtype=, /createdir)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF self->corrdir_type_exists(type, info=info) THEN BEGIN 
+      dir = self->corrdir_base()
+      dir = concat_dir(dir, info.basedir)
+      dir = concat_dir(dir, strlowcase(type))
+
+      sample = self->sample(type)
+      dir = concat_dir(dir, sample)
+
+      IF n_elements(dtype) NE 0 THEN BEGIN 
+          IF self->corrdir_dirtype_exists(type, dtype, info=info) THEN BEGIN 
+
+              IF n_elements(subtype) NE 0 THEN BEGIN 
+                  IF info.sub THEN BEGIN 
+                      dir = concat_dir(dir, 'sub')
+                      dir = concat_dir(dir, strlowcase(subtype))
+                  ENDIF ELSE BEGIN 
+                      message,'type: "'+strlowcase(type)+'" does not support subsamples'
+                  ENDELSE 
+              ENDIF 
+
+              dir = concat_dir(dir, strlowcase(dtype))
+          ENDIF ELSE BEGIN 
+              message,'type: "'+strlowcase(type)+'" has no directory: "'+strlowcase(dtype)+'"'
+          ENDELSE 
+      ENDIF 
+  ENDIF ELSE BEGIN 
+      message,'Unknown type: "'+strlowcase(type)+'"'
+  ENDELSE 
+
+  IF keyword_set(createdir) THEN BEGIN 
+      IF NOT file_test(dir, /dir) THEN file_mkdir, dir
+  ENDIF 
+  return,dir
+END 
+
+FUNCTION correlate::extension, type, dtype
+
+  IF n_elements(type) EQ 0 OR n_elements(dtype) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: ext=co->extension(type, dtype)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  ltype = strlowcase(type)
+  ldtype = strlowcase(dtype)
+  IF ldtype EQ 'par' THEN BEGIN 
+      ext = '.conf'
+  ENDIF ELSE IF ldtype EQ 'script' THEN BEGIN 
+      ext = '.sh'
+  ENDIF ELSE IF ldtype EQ 'pbs' THEN BEGIN 
+      ext = '.pbs'
+  ENDIF ELSE IF ltype EQ 'kcorr' OR ldtype EQ 'htm' THEN BEGIN 
+      ext = '.bin'
+  ENDIF ELSE BEGIN 
+      ext = '.st'
+  ENDELSE 
+  return, ext
+END 
+
+
+FUNCTION correlate::add_randnums, oldfiles, randnum
+  nf = n_elements(oldfiles)
+  nrand = n_elements(randnum)
+  FOR fi=0L, nf-1 DO BEGIN 
+      FOR ri=0L,  nrand-1 DO BEGIN 
+          newfile = oldfiles[fi]+'_'+strn(randnum[ri], length=2, padchar='0')
+          add_arrval, newfile, newfiles
+      ENDFOR 
+  ENDFOR 
+  return, newfiles
+END 
+
+FUNCTION correlate::corrfile, type, dtype, subtype=subtype, bin=bin, rzbin=rzbin, primary_randnum=primary_randnum, secondary_randnum=secondary_randnum, createdir=createdir, nodir=nodir
+
+
+  IF n_elements(type) EQ 0 OR n_elements(dtype) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: file=co->corrfile(type, dtype, subtype=, bin=, rzbin=, primary_randnum=, secondary_randnum=, /createdir, /nodir)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  par = self->par_struct()
+
+  dir = self->corrdir(type, dtype=dtype, subtype=subtype, createdir=createdir)
+
+  ltype = strlowcase(type)
+  ldtype = strlowcase(dtype)
+
+  file = ltype+'_'+self->sample(type)
+  
+  ;; sub types
+  IF n_elements(subtype) NE 0 THEN BEGIN 
+      lsubtype = strlowcase(subtype)
+      file = file + '_'+lsubtype
+
+      ;; bin numbers for subtype 
+      nbin = self->subtype_nbin(subtype)
+      IF n_elements(bin) NE 0 THEN BEGIN 
+          IF bin LT 0 OR bin GE nbin THEN BEGIN 
+              message,'Bin out of bounds: [0,'+ntostr(nbin-1)+']'
+          ENDIF 
+          binstr = strn(bin, length=2, padchar='0')
+      ENDIF ELSE BEGIN 
+          FOR i=0,nbin-1 DO add_arrval, strn(i, length=2, padchar='0'), binstr
+      ENDELSE 
+          
+      file = file + '_'+binstr
+
+  ENDIF 
+
+  IF ldtype EQ 'rzsub' THEN BEGIN 
+
+      rzinfo = self->rzsub_info()
+      file = file + '_'+par.rzsample
+
+      nrzbin = rzinfo.nrz
+      IF n_elements(rzbin) NE 0 THEN BEGIN 
+          IF rzbin LT 0 OR rzbin GE nrzbin THEN BEGIN 
+              message,'rzBin out of bounds: [0,'+ntostr(nrzbin-1)+']'
+          ENDIF 
+          rzbinstr = strn(rzbin, length=2, padchar='0')
+      ENDIF ELSE BEGIN 
+          FOR i=0,nrzbin-1 DO add_arrval, strn(i, length=2, padchar='0'), rzbinstr
+      ENDELSE 
+
+      file = file +'_'+rzbinstr
+  ENDIF 
+
+  file = file + '_'+ldtype
+
+  ;; random numbers for matched stuff
+  randinfo = self->randinfo(type, dtype)
+  IF randinfo.prand THEN BEGIN 
+      IF n_elements(primary_randnum) NE 0 THEN BEGIN 
+          file = self->add_randnums(file, primary_randnum)
+      ENDIF ELSE message,'You must enter a primary_randnum for "'+ltype+'", "'+ldtype+'"'
+  ENDIF 
+  IF randinfo.srand THEN BEGIN 
+      IF n_elements(secondary_randnum) NE 0 THEN BEGIN 
+          file = self->add_randnums(file, secondary_randnum)
+      ENDIF ELSE message,'You must enter a secondary_randnum for "'+ltype+'", "'+ldtype+'"'
+  ENDIF 
+
+  ;; extension
+  ext = self->extension(type,dtype)
+  file = file + ext
+
+  ;; add directory?
+  IF NOT keyword_set(nodir) THEN BEGIN 
+      file = concat_dir(dir, file)
+  ENDIF 
+
+  return, file
+
+END 
+
+;; List the actual random files we have on disk
+FUNCTION correlate::list_random, type, subtype=subtype, bin=bin, rzbin=rzbin, count=count
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: rfiles = obj->list_random(type, subtype=, bin=, rzbin=, count=)'
+      print,' type = dr|matchrd|matchdr|matchrr|rd_rzsub|rr_rzsub'
+  ENDIF 
+  CASE strlowcase(type) OF
+      'matchrd': BEGIN 
+          rfile0 = self->corrfile('dd', 'matchrd', $
+                                  subtype=subtype, bin=bin, primary_randnum=0)
+          rfile_pattern = repstr(rfile0, '_00.st', '_[0-9][0-9].st')
+      END 
+      'matchdr': BEGIN 
+          rfile0 = self->corrfile('dd', 'matchdr', $
+                                  subtype=subtype, bin=bin, secondary_randnum=0)
+          rfile_pattern = repstr(rfile0, '_00.st', '_[0-9][0-9].st')
+      END 
+      'matchrr': BEGIN 
+          rfile0 = self->corrfile('dd', 'matchrr', $
+                                  subtype=subtype, bin=bin, $
+                                  primary_randnum=0, secondary_randnum=0)
+          rfile_pattern = repstr(rfile0, '_00_00.st', '_[0-9][0-9]_[0-9][0-9].st')
+      END 
+      'rd_rzsub': BEGIN 
+          IF n_elements(rzbin) EQ 0 THEN message,'You must enter rzbin='
+          rfile0 = self->corrfile('rd','rzsub',rzbin=rzbin,primary_randnum=0)
+          rfile_pattern = repstr(rfile0, '_00.st', '_[0-9][0-9].st')
+      END 
+      'rr_rzsub': BEGIN 
+          IF n_elements(rzbin) EQ 0 THEN message,'You must enter rzbin='
+          rfile0 = self->corrfile('rr','rzsub',rzbin=rzbin,$
+                                  primary_randnum=0,secondary_randnum=0)
+          rfile_pattern = repstr(rfile0, '_00_00.st', '_[0-9][0-9]_[0-9][0-9].st')
+      END 
+      'dr': BEGIN 
+          rfile0 = self->corrfile('dr', 'output', secondary_randnum=0)
+          rfile_pattern = repstr(rfile0, '_00.st', '_[0-9][0-9].st')
+      END 
+      ELSE: message,'type must be dr|matchrd|matchdr|matchrr|rd_rzsub|rr_rzsub'
+  ENDCASE 
+
+  rfiles = findfile(rfile_pattern, count=count)
+  return, rfiles
+END 
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; File reading routines
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FUNCTION correlate::corr_read_kcorr, file
+
+  openr, lun, file, /get_lun
+
+  nz = 0L
+  readu, lun, nz
+  z = fltarr(nz)
+  readu, lun, z
+
+  ngmr = 0L
+  readu, lun, ngmr
+  gmr = fltarr(ngmr)
+  readu, lun, gmr
+
+  nrmi = 0L
+  readu, lun, nrmi
+  rmi = fltarr(nrmi)
+  readu, lun, rmi
+
+  nband = 0L
+  readu, lun, nband
+  bands = lonarr(nband)
+  readu, lun, bands
+
+  kcorr = fltarr(nz, ngmr, nrmi, nband)
+
+  tmp = 0.0
+  FOR iz=0L, nz-1 DO BEGIN 
+      FOR igmr=0L, ngmr-1 DO BEGIN 
+          FOR irmi=0L, nrmi-1 DO BEGIN 
+              FOR ib=0L, nband-1 DO BEGIN 
+                  
+                  readu, lun, tmp
+                  kcorr[iz, igmr, irmi, ib] = tmp
+
+              ENDFOR
+          ENDFOR
+      ENDFOR
+  ENDFOR 
+
+  free_lun, lun
+
+  struct = $
+    { $
+      nz: nz, $
+      zmin: min(z, max=zmax), $
+      zmax: zmax, $
+      zstep: z[1]-z[0], $
+      z: z, $
+      $
+      ngmr: ngmr, $
+      gmrmin: min(gmr, max=gmrmax), $
+      gmrmax: gmrmax, $
+      gmrstep: gmr[1]-gmr[0], $
+      gmr: gmr, $
+      $
+      nrmi: nrmi, $
+      rmimin: min(rmi, max=rmimax), $
+      rmimax: rmimax, $
+      rmistep: rmi[1]-rmi[0], $
+      rmi: rmi, $
+      $
+      bands: bands, $
+      kcorr: kcorr $
+    }
+
+  return, struct
+END 
+
+FUNCTION correlate::corr_read_htm, file
+  openr, lun, file, /get_lun
+  nrev = 0L
+  minid = 0L
+  maxid = 0L
+  readu, lun, nrev
+  readu, lun, minid
+  readu, lun, maxid
+  
+  rev = lonarr(nrev)
+  readu, lun, rev
+  
+  struct = {nrev: nrev, $
+            min: minid, $
+            max: maxid, $
+            rev: temporary(rev)}
+  return, struct
+END 
+
+FUNCTION correlate::corr_read, type, dtype, subtype=subtype, bin=bin, primary_randnum=primary_randnum, secondary_randnum=secondary_randnum, columns=columns
+
+
+  IF n_elements(type) EQ 0 OR n_elements(dtype) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: file=co->corr_read(type, dtype, subtype=, bin=, primary_randnum=, secondary_randnum=, columns=, hdr=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  ltype = strlowcase(type)
+  ldtype = strlowcase(dtype)
+  file = self->corrfile(type, dtype, subtype=subtype, bin=bin, primary_randnum=primary_randnum, secondary_randnum=secondary_randnum)
+  ext = self->extension(type,dtype)
+  CASE ext OF
+      '.st': BEGIN 
+          IF n_elements(file) EQ 1 THEN BEGIN 
+              print
+              print,'Reading file: ',file
+          ENDIF 
+          struct = read_idlstruct_multi(file, columns=columns)
+      END 
+      '.bin': BEGIN 
+          IF ldtype EQ 'kcorr' THEN BEGIN 
+              print
+              print,'reading file: ',file
+              struct = self->corr_read_kcorr(file)
+          ENDIF ELSE IF ldtype EQ 'htm' THEN BEGIN 
+              print
+              print,'Reading file: ',file
+              struct = self->corr_read_htm(file)
+          ENDIF ELSE BEGIN 
+              message,'.bin must be of dtype "kcorr" or "htm"'
+          ENDELSE 
+      END 
+      ELSE: message,'Cannot read files with extension: '+ext
+  ENDCASE 
+  return, struct
+END 
+
+
+
+;; Thse will be used by children of this class
+FUNCTION correlate::primary_struct, num
+
+  struct = { $
+             bcg_id: 0L, $
+             ra: 0d, $
+             dec: 0d, $
+             z: 0.0 $
+           }
+  IF n_elements(num) NE 0 THEN BEGIN 
+      struct = replicate(struct, num[0])
+  ENDIF 
+  return,struct
+END 
+FUNCTION correlate::secondary_struct, num, random=random
+
+  IF keyword_set(random) THEN BEGIN 
+      struct = { $
+                 ra: 0d, $
+                 dec: 0d, $
+                 htm_index: 0L $
+               }
+  ENDIF ELSE BEGIN 
+      struct = { $
+                 ra: 0d, $
+                 dec: 0d, $
+                 gflux: 0.0, $
+                 rflux: 0.0, $
+                 iflux: 0.0, $
+                 htm_index: 0L $
+               }
+  ENDELSE 
+
+  IF n_elements(num) NE 0 THEN BEGIN 
+      struct = replicate(struct, num[0])
+  ENDIF 
+  return,struct
+END 
+
+
+
+
+FUNCTION correlate::plotdir, subtype=subtype, base=base, matchzrand=matchzrand, createdir=createdir
+  dir = expand_tilde( esheldon_config('plot_dir') )
+  dir = concat_dir(dir, 'correlate')
+
+  sample = self->sample('dd')
+  dir = concat_dir(dir, sample)
+
+  IF n_elements(subtype) NE 0 AND NOT keyword_set(base) THEN BEGIN 
+      dir = concat_dir(dir, strlowcase(subtype))
+  ENDIF 
+
+  IF keyword_set(matchzrand) THEN BEGIN 
+      dir = concat_dir(dir, 'matchzrand')
+  ENDIF 
+
+  IF keyword_set(createdir) THEN BEGIN 
+      IF NOT file_test(dir, /dir) THEN file_mkdir, dir
+  ENDIF 
+
+  return,dir  
+END 
+
+FUNCTION correlate::plotfile, dtype, subtype=subtype, bin=bin, color=color, encapsulated=encapsulated, ratio=ratio, nodir=nodir, createdir=createdir
+
+
+  IF n_elements(dtype) EQ 0 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: psfile = c->plotfile(dtype, subtype=, bin=, /color, /encapsulated, /ratio, /nodir, /createdir)'
+      print
+      message,'Halting'
+  ENDIF  
+
+  ldtype = strlowcase(dtype)
+
+  tfile = self->corrfile('dd', dtype, subtype=subtype, bin=0, /nodir)
+
+  IF keyword_set(encapsulated) THEN ext='.eps' ELSE ext='.ps'
+  IF keyword_set(color) THEN cstr = '_color' ELSE cstr=''
+  IF keyword_set(ratio) THEN rstr = '_ratio' ELSE rstr=''
+
+  ext = rstr + cstr + ext
+
+  file = repstr(tfile, '.st', ext)
+
+  IF n_elements(subtype) NE 0 THEN BEGIN 
+      IF n_elements(bin) NE 0 THEN BEGIN 
+          ;; plot for specific bin
+          bstr = strn(bin[0], len=2, padchar='0')
+          file = repstr(file, '00_'+dtype, bstr+'_'+ldtype)
+      ENDIF ELSE BEGIN 
+          file = repstr(file, '00_'+dtype, ldtype)
+      ENDELSE 
+  ENDIF 
+
+  IF NOT keyword_set(nodir) THEN BEGIN 
+      dir = self->plotdir(subtype=subtype, createdir=createdir)  
+      file = concat_dir(dir, file)
+  ENDIF 
+
+  return, file
+
+END 
+
+
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Creating input configure files and scripts
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+PRO correlate::run_par_script, nprimary_random, nsecondary_random, jet=jet, cheops=cheops, bias=bias, mafalda=mafalda
+
+  IF n_params() LT 2 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: c->run_par_script, nprimary_random, nsecondary_random, /jet, /cheops, /bias, /mafalda'
+      print
+      message,'Halting'
+  ENDIF 
+
+
+  self->write_par, 'dd', jet=jet, cheops=cheops, bias=bias, mafalda=mafalda
+  self->write_script, 'dd', jet=jet, cheops=cheops, bias=bias, mafalda=mafalda
+
+  IF keyword_set(mafalda) THEN BEGIN 
+      self->write_pbs, 'dd'
+  ENDIF 
+
+  FOR i=0L, nprimary_random-1 DO BEGIN 
+      self->write_par, 'rd', jet=jet, cheops=cheops, bias=bias, primary_randnum=i, mafalda=mafalda
+      self->write_script, 'rd', jet=jet, cheops=cheops, bias=bias, primary_randnum=i, mafalda=mafalda
+
+      IF keyword_set(mafalda) THEN BEGIN 
+          self->write_pbs, 'rd', primary_randnum=i
+      ENDIF 
+  ENDFOR 
+
+  FOR i=0L, nsecondary_random-1 DO BEGIN 
+      self->write_par, 'dr', jet=jet, cheops=cheops, bias=bias, secondary_randnum=i, mafalda=mafalda
+      self->write_script, 'dr', jet=jet, cheops=cheops, bias=bias, secondary_randnum=i, mafalda=mafalda
+
+      IF keyword_set(mafalda) THEN BEGIN 
+          self->write_pbs, 'dr', secondary_randnum=i
+      ENDIF 
+  ENDFOR 
+
+  FOR i=0L, nprimary_random-1 DO BEGIN 
+      FOR j=0L, nsecondary_random-1 DO BEGIN 
+          self->write_par, 'rr', jet=jet, cheops=cheops, bias=bias, primary_randnum=i, secondary_randnum=j, mafalda=mafalda
+          self->write_script, 'rr', jet=jet, cheops=cheops, bias=bias, primary_randnum=i, secondary_randnum=j, mafalda=mafalda
+
+          IF keyword_set(mafalda) THEN BEGIN 
+              self->write_pbs, 'rr', primary_randnum=i, secondary_randnum=j
+          ENDIF 
+      ENDFOR 
+  ENDFOR 
+
+
+END 
+
+
+PRO correlate::write_pbs, type, $
+             primary_randnum=primary_randnum, secondary_randnum=secondary_randnum
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: c->write_pbs, type, primary_randnum=, secondary_randnum='
+      print
+      message,'Halting'
+  ENDIF 
+
+  parfile = self->corrfile(type, 'par', $
+                           primary_randnum=primary_randnum, $
+                           secondary_randnum=secondary_randnum, /createdir)
+  parnodir = self->corrfile(type, 'par', $
+                          primary_randnum=primary_randnum, $
+                          secondary_randnum=secondary_randnum, $
+                          /nodir)
+  pbs = self->corrfile(type, 'pbs', $
+                       primary_randnum=primary_randnum, $
+                       secondary_randnum=secondary_randnum, /createdir)
+
+  output_file = self->corrfile(type, 'output', $
+                               primary_randnum=primary_randnum, $
+                               secondary_randnum=secondary_randnum, $
+                               /createdir)
+
+
+  parfile  = repstr(parfile, '/home/users', '/home')
+  parfile  = repstr(parfile, '.conf', '_mafalda.conf')
+  parnodir = repstr(parnodir, '.conf', '_mafalda.conf')
+  output_file =    repstr(output_file, '/home/users', '/scratch')
+
+  ;; where we will copy
+  outdir = self->corrdir(type, dtype='output')
+  scratchdir = repstr(outdir, '/home/users', '/scratch')
+  datadir = repstr(outdir, '/home/users', '/home')
+
+  print,'Writing to pbs: ',pbs
+  pbs_mafalda = repstr(pbs, '/home/users','/home')
+
+  ;; The job name
+  jobname = strlowcase(type)
+  IF n_elements(primary_randnum) NE 0 THEN BEGIN 
+      jobname = jobname + '_'+strn(primary_randnum, len=2, padchar='0')
+  ENDIF 
+  IF n_elements(secondary_randnum) NE 0 THEN BEGIN 
+      jobname = jobname + '_'+strn(secondary_randnum, len=2, padchar='0')
+  ENDIF 
+
+  openw, lun, pbs, /get
+
+  printf, lun, "#!/bin/sh"
+  printf, lun, "#PBS -V"               ; Keep environment
+  printf, lun, "#PBS -l cput=20:0:0"   ; at most 20 hours
+  printf, lun, "#PBS -l mem=1800mb"    ; at most 1.8Gb
+  printf, lun, "#PBS -N "+jobname      ; job name
+  printf, lun, "#PBS -m ae"            ; send email on abort and end
+  printf, lun
+  printf, lun, "# dir in home directory. Only copy into this directory"
+  printf, lun, "# after the job has completed"
+  printf, lun, "datadir="+datadir
+  printf, lun, "mkdir -p $datadir"
+  printf, lun
+  printf, lun, "# the local scratch disk on the node"
+  printf, lun, "scratch="+scratchdir
+  printf, lun, "mkdir -p $scratch"
+  printf, lun
+  printf, lun, "# The output file on scratch disk"
+  printf, lun, "output="+output_file
+  printf, lun, 'correlate '+parfile+' &> '+pbs_mafalda+'.out'
+  printf, lun
+  printf, lun, "# copy the data to the home area and remove the file"
+  printf, lun, "cp -f $output $datadir/"
+  printf, lun, "if [ $? == 0 ] ;then rm $output; fi"
+  printf, lun
+  
+  free_lun, lun
+
+
+
+
+END 
+
+
+PRO correlate::write_script, type, $
+             primary_randnum=primary_randnum, secondary_randnum=secondary_randnum, $
+             jet=jet, cheops=cheops, bias=bias, mafalda=mafalda
+
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: c->write_script, type, primary_randnum=, secondary_randnum=, /jet, /cheops, /bias, /mafalda'
+      print
+      message,'Halting'
+  ENDIF 
+
+  parfile = self->corrfile(type, 'par', $
+                           primary_randnum=primary_randnum, $
+                           secondary_randnum=secondary_randnum, /createdir)
+  parnodir = self->corrfile(type, 'par', $
+                          primary_randnum=primary_randnum, $
+                          secondary_randnum=secondary_randnum, $
+                          /nodir)
+  script = self->corrfile(type, 'script', $
+                          primary_randnum=primary_randnum, $
+                          secondary_randnum=secondary_randnum, /createdir)
+
+  IF keyword_set(jet) THEN BEGIN 
+      script   = repstr(script, '.sh', '_jet.sh')
+      parfile  = repstr(parfile, '/home/users', '/scratch')
+      parfile  = repstr(parfile, '.conf', '_jet.conf')
+      parnodir = repstr(parnodir, '/home/users', '/scratch')
+      parnodir = repstr(parnodir, '.conf', '_jet.conf')
+  ENDIF ELSE IF keyword_set(cheops) THEN BEGIN 
+      script   = repstr(script, '.sh', '_cheops.sh')
+      parfile  = repstr(parfile, '/home/users', '/net/cheops2/home')
+      parfile  = repstr(parfile, '.conf', '_cheops.conf')
+      parnodir = repstr(parnodir, '/home/users', '/net/cheops2/home')
+      parnodir = repstr(parnodir, '.conf', '_cheops.conf')
+  ENDIF ELSE IF keyword_set(mafalda) THEN BEGIN 
+      script   = repstr(script, '.sh', '_mafalda.sh')
+      parfile  = repstr(parfile, '/home/users', '/home')
+      parfile  = repstr(parfile, '.conf', '_mafalda.conf')
+      parnodir = repstr(parnodir, '/home/users', '/home')
+      parnodir = repstr(parnodir, '.conf', '_mafalda.conf')
+  ENDIF 
+
+  IF keyword_set(bias) THEN BEGIN 
+      executable = '~/cvs_checkout/ccode-Bias/correlate/correlate'
+      script = repstr(script, '.sh', '_bias.sh')
+  ENDIF ELSE BEGIN 
+      executable = 'correlate'
+  ENDELSE 
+
+  print,'Writing to script: ',script
+
+  openw, lun, script, /get
+
+  printf, lun, executable+' '+parfile
+
+  mess = 'finished correlate '+parnodir
+  printf,lun,'dt=`date`'
+  address = 'erin.sheldon@gmail.com'
+  printf, lun, $
+    'echo "'+mess+' $dt" | mail '+address+' -s "'+mess+'"'
+
+  free_lun, lun
+
+END 
+
+PRO correlate::write_par, type, $
+             primary_randnum=primary_randnum, secondary_randnum=secondary_randnum, $
+             jet=jet, cheops=cheops, bias=bias, mafalda=mafalda
+
+
+  IF n_elements(type) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: c->write_par, type, primary_randnum=, secondary_randnum=, /jet, /cheops, /bias, /mafalda'
+      print,'type = dd|dr|rd|rr'
+      print
+      message,'Halting'
+  ENDIF 
+
+  par = self->par_struct()
+  parfile = self->corrfile(type, 'par', $
+                           primary_randnum=primary_randnum, $
+                           secondary_randnum=secondary_randnum, $
+                           /createdir)
+  
+
+  ltype = strlowcase(type)
+  CASE ltype OF
+      'dd': BEGIN 
+          primary_file = self->corrfile('primary','input', /createdir)
+          secondary_file = self->corrfile('secondary','input', /createdir)
+          htmrev_file = self->corrfile('secondary','htm', /createdir)
+          kcorr_file = self->corrfile('kcorr','input', /createdir)
+          corrtype = 1
+      END
+      'dr': BEGIN 
+          primary_file = self->corrfile('primary','input', /createdir)
+          secondary_file = self->corrfile('secondary_random','input', $
+                                          secondary_randnum=secondary_randnum, $
+                                          /createdir)
+          htmrev_file = self->corrfile('secondary_random','htm', $
+                                       secondary_randnum=secondary_randnum, $
+                                       /createdir)
+          kcorr_file = self->corrfile('kcorr','input', /createdir)
+          corrtype = 2
+      END
+      'rd': BEGIN 
+          primary_file = self->corrfile('primary_random','input', $
+                                        primary_randnum=primary_randnum, $
+                                        /createdir)
+          secondary_file = self->corrfile('secondary','input', /createdir)
+          htmrev_file = self->corrfile('secondary','htm', /createdir)
+          kcorr_file = self->corrfile('kcorr','input', /createdir)
+          corrtype = 1
+      END
+      'rr': BEGIN 
+          primary_file = self->corrfile('primary_random','input', $
+                                        primary_randnum=primary_randnum, $
+                                        /createdir)
+          secondary_file = self->corrfile('secondary_random','input', $
+                                          secondary_randnum=secondary_randnum, $
+                                          /createdir)
+          htmrev_file = self->corrfile('secondary_random','htm', $
+                                       secondary_randnum=secondary_randnum, $
+                                       /createdir)
+          kcorr_file = self->corrfile('kcorr','input', /createdir)
+          corrtype = 2
+      END
+  ENDCASE 
+
+
+
+  output_file = self->corrfile(type, 'output', $
+                               primary_randnum=primary_randnum, $
+                               secondary_randnum=secondary_randnum, $
+                               /createdir)
+
+  IF keyword_set(jet) THEN BEGIN 
+      parfile =        repstr(parfile, '.conf', '_jet.conf')
+      primary_file =   repstr(primary_file, '/home/users', '/scratch')
+      secondary_file = repstr(secondary_file, '/home/users', '/scratch')
+      htmrev_file =    repstr(htmrev_file, '/home/users', '/scratch')
+      kcorr_file =     repstr(kcorr_file, '/home/users', '/scratch')
+      output_file =    repstr(output_file, '/home/users', '/scratch')
+  ENDIF ELSE IF keyword_set(cheops) THEN BEGIN 
+      parfile =        repstr(parfile, '.conf', '_cheops.conf')
+      primary_file =   repstr(primary_file, '/home/users', '/net/cheops2/home')
+      secondary_file = repstr(secondary_file, '/home/users', '/net/cheops2/home')
+      htmrev_file =    repstr(htmrev_file, '/home/users', '/net/cheops2/home')
+      kcorr_file =     repstr(kcorr_file, '/home/users', '/net/cheops2/home')
+      output_file =    repstr(output_file, '/home/users', '/net/cheops2/home')
+  ENDIF ELSE IF keyword_set(mafalda) THEN BEGIN 
+      parfile =        repstr(parfile, '.conf', '_mafalda.conf')
+      primary_file =   repstr(primary_file, '/home/users', '/home')
+      secondary_file = repstr(secondary_file, '/home/users', '/home')
+      htmrev_file =    repstr(htmrev_file, '/home/users', '/home')
+      kcorr_file =     repstr(kcorr_file, '/home/users', '/home')
+      output_file =    repstr(output_file, '/home/users', '/scratch')
+  ENDIF 
+
+  print,'Will write to par file: ',parfile
+
+
+
+  openw, lun, parfile, /get_lun
+;  lun=-1
+
+  printf, lun, 'sample              '+self->sample(type)
+  printf, lun, 'primary_file        '+primary_file
+  printf, lun, 'secondary_file      '+secondary_file
+  printf, lun, 'htmrev_file         '+htmrev_file
+  printf, lun, 'kcorr_file          '+kcorr_file
+  printf, lun, 'output_file         '+output_file
+  printf, lun, 'corrtype            '+ntostr(corrtype)
+  printf, lun, 'h                   '+ntostr(par.h)
+  printf, lun, 'omega_m             '+ntostr(par.omega_m)
+  printf, lun, 'nrad                '+ntostr(par.nrad)
+  printf, lun, 'rmin                '+ntostr(par.rmin)
+  printf, lun, 'rmax                '+ntostr(par.rmax)
+  printf, lun, 'nlum                '+ntostr(par.nlum)
+  printf, lun, 'loglmin             '+ntostr(par.loglmin)
+  printf, lun, 'loglmax             '+ntostr(par.loglmax)
+  printf, lun, 'nkgmr               '+ntostr(par.nkgmr)
+  printf, lun, 'kgmrmin             '+ntostr(par.kgmrmin)
+  printf, lun, 'kgmrmax             '+ntostr(par.kgmrmax)
+  printf, lun, 'comoving            '+ntostr(par.comoving)
+  printf, lun, 'depth               '+ntostr(par.depth)
+
+  free_lun, lun
+
+END 
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Help figuring out how mag limits
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Print the corresponding apparent i magnitude given a redshift and
+;; an absolute magnitude.  
+;;
+;; Quick: 
+;;   z=0.30,  absmag=-19.0 -> m = 21.0706
+;;   z=0.21,  absmag=-18.0 -> m = 21.0807
+;;   z=0.135, absmag=-17   -> m = 21.0644
+
+PRO correlate::print_max_apparent_imag, z, iabsmag, omega_m=omega_m
+
+
+  IF n_params() LT 2 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: mb->print_max_apparent_mag, z, iabsmag, omega_m='
+      print
+      message,'Halting'
+  ENDIF 
+
+  ks = self->read_kcorr()
+  zint = fix( interpol(lindgen(ks.nz), ks.z, z) )
+
+  tk = reform( ks.kcorr[zint, *, *, 3] )
+
+  sz = size(tk,/dim)
+  index = lindgen(sz[0]*sz[1])
+  x = index MOD sz[0]
+  y = index/sz[0]
+
+  max_i_kcorr = max(tk, mind)
+
+
+  tk = ks.kcorr[zint, *, *, 3]
+  w=where(tk NE -9999.0)
+  min_i_kcorr = min( tk[w] )
+
+  da = angdist_lambda(z, omegamat=omega_m, dlum=dlum)
+  distmod = 5.0*( alog10(dlum) + 6 ) - 5.0
+
+  m_max = iabsmag + distmod + max_i_kcorr
+
+  print,'z = ',z
+  print,'gmr = ',ks.gmr[x[mind]]
+  print,'rmi = ',ks.rmi[y[mind]]
+  print,'zint = ',zint
+  print,'iabsmag = ',iabsmag
+  print,'min i kcorr', min_i_kcorr
+  print,'max i kcorr', max_i_kcorr,'  flux: ',10.0^(-0.4*max_i_kcorr)
+  print,'Max apparent i-band mag: ',m_max
+END 
+
+
+
+PRO correlate::print_min_apparent_inmgy, z, ilum, omega_m=omega_m
+
+
+  IF n_params() LT 2 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: mb->print_min_apparent_inmgy, z, ilum, omega_m='
+      print,'ilum in units of 10^10 solar'
+      print
+      message,'Halting'
+  ENDIF 
+
+  sunknmgy = ( self->sunknmgy() )[3]
+
+  ks = self->read_kcorr()
+  zint = fix( interpol(lindgen(ks.nz), ks.z, z) )
+
+  tk = reform( ks.kcorr[zint, *, *, 3] )
+
+  sz = size(tk,/dim)
+  index = lindgen(sz[0]*sz[1])
+  x = index MOD sz[0]
+  y = index/sz[0]
+
+  max_i_kcorr = max(tk, mind)
+  
+  min_i_kflux = 10.0^( -0.4*max_i_kcorr )
+
+  da = angdist_lambda(z, omegamat=omega_m, dlum=dlum)
+
+  knmgy_min = ilum*sunknmgy/(dlum^2)
+  nmgy_min = knmgy_min*min_i_kflux
+
+  print,'z = ',z
+  print,'gmr = ',ks.gmr[x[mind]]
+  print,'rmi = ',ks.rmi[y[mind]]
+  print,'zint = ',zint
+  print,'ilum (10^10) = ',ilum
+  print,'min i kflux', min_i_kflux,'  max i kcorr: ',max_i_kcorr
+  print,'Min apparent i-band nmgy: ',nmgy_min
+END 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Sum rows of the output file
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FUNCTION correlate::radlumcolor_sumstruct, corrected=corrected
+
+  par = self->par_struct()
+
+  nrad = par.nrad
+  nlum = par.nlum
+  ngmr = par.nkgmr
+
+  radarray = dblarr(nrad)
+
+  biglon64 = lon64arr(nrad, nlum, ngmr)
+  bigdbl = dblarr(nrad,nlum,ngmr)
+
+  IF NOT keyword_set(corrected) THEN BEGIN 
+      rcounts = lon64arr(nrad)
+      counts = biglon64
+  ENDIF ELSE BEGIN 
+      rcounts = dblarr(nrad)
+      counts = bigdbl
+  ENDELSE 
+  ilum = dblarr(nrad, nlum, ngmr) 
+
+  IF NOT keyword_set(corrected) THEN BEGIN 
+      sumstruct = $
+        { $
+          npoints: 0LL, $
+          nrad: nrad, $
+          nlum: nlum, $
+          ngmr: ngmr, $
+          totpairs: 0LL, $
+          $
+          radbins_min: par.radbins_min, $
+          radbins_max: par.radbins_max, $
+          area: par.area, $
+          loglbins_min: par.loglbins_min, $
+          loglbins_max: par.loglbins_max, $
+          kgmrbins_min: par.kgmrbins_min, $
+          kgmrbins_max: par.kgmrbins_max, $
+          $
+          rsum:  radarray, $
+          rsum2: radarray, $
+          $
+          kgflux:  radarray, $      ; sum of flux over all primaries
+          kgflux2: radarray, $      ; sum of flux^2 over all primaries, for color errors
+          krflux:  radarray, $
+          krflux2: radarray, $
+          kiflux:  radarray, $
+          kiflux2: radarray, $
+          $
+          radcounts:   rcounts, $ ; These two totals over color,lum
+          ilumcounts:  ilum,    $ ; sum if i-band luminosity over all primaries
+          ilumcounts2: ilum,    $ ; sum of square of above, for errors
+          counts:      counts,  $ ; Total counts
+          $                
+          $
+          $                     ;   -- Derived quantities: means/errs over primaries
+          $
+          r:         radarray, $    ; mean radius
+          r_err:     radarray, $
+          kgmr:      radarray, $    ; mean total color
+          kgmr_err:  radarray, $ 
+          krmi:      radarray, $
+          krmi_err:  radarray, $
+          $
+          radilum:         radarray, $ ; mean luminosity in radial bins
+          radilum_err:     radarray, $
+          radilumdens:     radarray, $
+          radilumdens_err: radarray, $
+          radnumdens:      radarray, $ ; mean density in radial bins, per Mpc^2
+          radnumdens_err:  radarray, $
+          $
+          ilum:         bigdbl, $ ; mean luminosity in all bins
+          ilum_err:     bigdbl, $
+          ilumdens:     bigdbl, $
+          ilumdens_err: bigdbl, $
+          numdens:      bigdbl, $ ; mean density in all bins, per Mpc^2
+          numdens_err:  bigdbl  $
+        }
+      return, sumstruct
+  ENDIF ELSE BEGIN 
+      corrected = $
+        { $
+          npoints: 0LL, $
+          nrad: nrad, $
+          nlum: nlum, $
+          ngmr: ngmr, $
+          totpairs: 0LL, $
+          $
+          radbins_min: par.radbins_min, $
+          radbins_max: par.radbins_max, $
+          area: par.area, $
+          loglbins_min: par.loglbins_min, $
+          loglbins_max: par.loglbins_max, $
+          kgmrbins_min: par.kgmrbins_min, $
+          kgmrbins_max: par.kgmrbins_max, $
+          $
+          $
+          $  ;   -- Derived quantities: means/errs over primaries
+          $
+          r:        radarray, $     ; mean radius
+          r_err:    radarray, $
+          kgmr:     radarray, $     ; mean total color
+          kgmr_err: radarray, $
+          krmi:     radarray, $
+          krmi_err: radarray, $
+          $
+          radilumdens:     radarray, $ ; mean luminosity density in rad bins, per Mpc^2
+          radilumdens_err: radarray, $
+          radnumdens:      radarray, $ ; mean density in radial bins, per Mpc^2
+          radnumdens_err:  radarray, $
+          $
+          ilumdens:     bigdbl, $ ; mean lum density in all bins, per Mpc^2
+          ilumdens_err: bigdbl, $
+          numdens:      bigdbl, $ ; mean density in all bins, per Mpc^2
+          numdens_err:  bigdbl  $
+        }
+      return, corrected
+  ENDELSE 
+END 
+
+
+FUNCTION correlate::rad_sumstruct, corrected=corrected
+
+  par = self->par_struct()
+
+  nrad = par.nrad
+  nlum = par.nlum
+  ngmr = par.nkgmr
+
+  radarray = dblarr(nrad)
+  l64rad = lon64arr(nrad)
+
+  IF NOT keyword_set(corrected) THEN BEGIN 
+      rcounts = lon64arr(nrad)
+      counts = l64rad
+  ENDIF ELSE BEGIN 
+      rcounts = dblarr(nrad)
+      counts = radarray
+  ENDELSE 
+  ilum = dblarr(nrad, nlum, ngmr) 
+
+  IF NOT keyword_set(corrected) THEN BEGIN 
+      sumstruct = $
+        { $
+          npoints: 0LL, $
+          nrad: nrad, $
+          nlum: nlum, $
+          ngmr: ngmr, $
+          totpairs: 0LL, $
+          $
+          radbins_min: par.radbins_min, $
+          radbins_max: par.radbins_max, $
+          area: par.area, $
+          loglbins_min: par.loglbins_min, $
+          loglbins_max: par.loglbins_max, $
+          kgmrbins_min: par.kgmrbins_min, $
+          kgmrbins_max: par.kgmrbins_max, $
+          $
+          rsum:  radarray, $
+          rsum2: radarray, $
+          $
+          totaldensity:       0d, $ ; total(secondary density/DA^2)
+          usedarea:     radarray, $ ; counts/totaldensity
+          usedarea_err: radarray, $
+          radcounts:    rcounts,  $ ; These two totals over color,lum
+          counts:       rcounts,  $ ; Total counts
+          $
+          $                     ;   -- Derived quantities: means/errs over primaries
+          $
+          r:         radarray, $    ; mean radius
+          r_err:     radarray, $
+          $
+          radnumdens:      radarray, $ ; mean density in radial bins, per Mpc^2
+          radnumdens_err:  radarray  $
+        }
+      return, sumstruct
+  ENDIF ELSE BEGIN 
+      corrected = $
+        { $
+          npoints: 0LL, $
+          nrad: nrad, $
+          nlum: nlum, $
+          ngmr: ngmr, $
+          totpairs: 0LL, $
+          $
+          radbins_min: par.radbins_min, $
+          radbins_max: par.radbins_max, $
+          area: par.area, $
+          loglbins_min: par.loglbins_min, $
+          loglbins_max: par.loglbins_max, $
+          kgmrbins_min: par.kgmrbins_min, $
+          kgmrbins_max: par.kgmrbins_max, $
+          $                     ;   -- Derived quantities: means/errs over primaries
+          $
+          totaldensity:       0d, $ ; total(secondary density/DA^2)
+          usedarea:     radarray, $ ; counts/totaldensity
+          usedarea_err: radarray, $
+          $
+          r:        radarray, $     ; mean radius
+          r_err:    radarray, $
+          $
+          radnumdens:      radarray, $ ; mean density in radial bins, per Mpc^2
+          radnumdens_err:  radarray  $
+        }
+      return, corrected
+  ENDELSE 
+END 
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; For summing over input primaries
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+PRO correlate::_sum_output, instruct, outstruct, index=index
+
+  IF n_elements(instruct) EQ 0 OR n_elements(outstruct) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: c->_sum_output, instruct, outstruct, index='
+      print
+      message,'Halting'
+  ENDIF 
+
+  ninstruct = n_elements(instruct)
+
+  nind = n_elements(index)
+  IF nind EQ 0 THEN BEGIN 
+      nind = ninstruct
+      index = lindgen(nind)
+  ENDIF
+
+  IF tag_exist(outstruct, 'ilumcounts') THEN BEGIN 
+      radlumcolor=1 
+  ENDIF ELSE BEGIN 
+      radlumcolor=0
+  ENDELSE 
+
+
+
+  outstruct.npoints = outstruct.npoints + nind
+
+  ;; It's faster to do these with total
+  IF nind GT 1 THEN BEGIN 
+      outstruct.totpairs = outstruct.totpairs + total_int( instruct[index].totpairs )
+  
+      outstruct.rsum  = outstruct.rsum + total( instruct[index].rsum, 2, /double )
+      outstruct.rsum2 = outstruct.rsum2 + total( instruct[index].rsum^2, 2, /double )
+      
+      IF radlumcolor THEN BEGIN 
+          outstruct.kgflux = outstruct.kgflux + total( instruct[index].kgflux, 2, /double )
+          outstruct.krflux = outstruct.krflux + total( instruct[index].krflux, 2, /double )
+          outstruct.kiflux = outstruct.kiflux + total( instruct[index].kiflux, 2, /double )
+          
+          outstruct.kgflux2 = outstruct.kgflux2 + total( instruct[index].kgflux^2, 2, /double )
+          outstruct.krflux2 = outstruct.krflux2 + total( instruct[index].krflux^2, 2, /double )
+          outstruct.kiflux2 = outstruct.kiflux2 + total( instruct[index].kiflux^2, 2, /double )
+      ENDIF 
+  ENDIF ELSE BEGIN 
+      outstruct.totpairs = outstruct.totpairs + instruct[index].totpairs
+  
+      outstruct.rsum  = outstruct.rsum + instruct[index].rsum
+      outstruct.rsum2 = outstruct.rsum2 + instruct[index].rsum^2
+      
+      IF radlumcolor THEN BEGIN 
+          outstruct.kgflux = outstruct.kgflux + instruct[index].kgflux
+          outstruct.krflux = outstruct.krflux + instruct[index].krflux
+          outstruct.kiflux = outstruct.kiflux + instruct[index].kiflux
+          
+          outstruct.kgflux2 = outstruct.kgflux2 + instruct[index].kgflux^2
+          outstruct.krflux2 = outstruct.krflux2 + instruct[index].krflux^2
+          outstruct.kiflux2 = outstruct.kiflux2 + instruct[index].kiflux^2
+      ENDIF 
+  ENDELSE 
+
+  ;; Its faster to do this in a loop! Presumably it has to do with the strides..
+  nrad = n_elements(outstruct.r)
+  radcounts = lon64arr(nrad)
+  FOR ii=0L, nind-1 DO BEGIN 
+      i = index[ii]
+
+      outstruct.counts = outstruct.counts + instruct[i].counts
+
+      ;; needed to do this here because of the weighted summing
+      ;; for randoms; small numbers get killed in the rounding
+      FOR ir=0L,nrad-1 DO BEGIN 
+          radcounts[ir] = total_int( instruct[i].counts[ir,*,*] )
+      ENDFOR 
+      outstruct.radcounts = outstruct.radcounts + radcounts
+
+
+      IF radlumcolor THEN BEGIN 
+          outstruct.ilumcounts  = outstruct.ilumcounts  + instruct[i].ilum
+          outstruct.ilumcounts2 = outstruct.ilumcounts2 + instruct[i].ilum^2
+      ENDIF 
+  ENDFOR 
+
+END 
+
+
+
+
+; indices is index for this chunk
+; rows is the requested rows
+PRO correlate::_sum_match_rows, instruct, indices, rows, outstruct
+  IF n_params() LT 4 THEN BEGIN 
+      print,'-Syntax: obj->_sum_match_rows, instruct, indices, rows, outstruct'
+      print
+      message,'halting'
+  ENDIF 
+  match, indices, rows, mind, mrows
+  IF mrows[0] NE -1 THEN BEGIN 
+      self->_sum_output, instruct, outstruct, index=mind
+  ENDIF 
+END 
+
+PRO correlate::_sum_match_keeparray, instruct, indices, keeparray, outstructs
+  IF n_params() LT 4 THEN BEGIN 
+      print,'-Syntax: obj->_sum_match_keeparray, instruct, indices, keeparray, outstructs'
+      print
+      message,'halting'
+  ENDIF 
+
+  nbin = n_elements(keeparray)
+  IF n_elements(outstructs) NE nbin THEN message,'outstructs must be same size as keeparray'
+  FOR i=0L, nbin-1 DO BEGIN 
+
+      match, indices, *keeparray[i], mind, mrows
+      IF mrows[0] NE -1 THEN BEGIN 
+          t = outstructs[i]
+          self->_sum_output, instruct, t, index=mind
+          outstructs[i] = t
+      ENDIF 
+  ENDFOR 
+
+END 
+
+
+
+
+
+
+
+;; For summing over sumstructs
+FUNCTION correlate::combine_sumstructs, sumstructs
+
+  nsum = n_elements(sumstructs)
+  IF nsum EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: st = obj->combine_sumstructs(sumstructs)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF nsum EQ 1 THEN return, sumstructs
+
+  IF tag_exist(sumstructs, 'ilumcounts') THEN BEGIN 
+      radlumcolor=1 
+      out= self->radlumcolor_sumstruct()
+  ENDIF ELSE BEGIN 
+      radlumcolor=0
+      out= self->rad_sumstruct()
+  ENDELSE 
+
+
+  nrad = n_elements(sumstructs[0].r)
+  radcounts = lon64arr(nrad)
+
+  FOR index=0L, nsum-1 DO BEGIN 
+
+      out.npoints = out.npoints + sumstructs[index].npoints
+
+      out.totpairs = out.totpairs + sumstructs[index].totpairs
+  
+      out.rsum  = out.rsum + sumstructs[index].rsum
+      out.rsum2 = out.rsum2 + sumstructs[index].rsum2
+
+      out.counts = out.counts + sumstructs[index].counts
+
+      ;; needed to do this here because of the weighted summing
+      ;; for randoms; small numbers get killed in the rounding
+      FOR ir=0L,nrad-1 DO BEGIN 
+          radcounts[ir] = total_int( sumstructs[index].counts[ir,*,*] )
+      ENDFOR 
+      out.radcounts = out.radcounts + radcounts
+      
+      IF radlumcolor THEN BEGIN 
+          out.kgflux = out.kgflux + sumstructs[index].kgflux
+          out.krflux = out.krflux + sumstructs[index].krflux
+          out.kiflux = out.kiflux + sumstructs[index].kiflux
+          
+          out.kgflux2 = out.kgflux2 + sumstructs[index].kgflux2
+          out.krflux2 = out.krflux2 + sumstructs[index].krflux2
+          out.kiflux2 = out.kiflux2 + sumstructs[index].kiflux2
+          
+          out.ilumcounts  = out.ilumcounts  + sumstructs[index].ilumcounts
+          out.ilumcounts2 = out.ilumcounts2 + sumstructs[index].ilumcounts2
+      ENDIF ELSE BEGIN 
+          out.totaldensity = out.totaldensity + sumstructs[index].totaldensity
+      ENDELSE 
+  ENDFOR 
+
+
+
+  self->calc_sum_derived, out
+
+  return, out
+END 
+
+
+;; For summing over sumstructs with weights
+FUNCTION correlate::wcombine_sumstructs, sumstructs, weights
+
+  nsum = n_elements(sumstructs)
+  nweight = n_elements(weights)
+  IF nsum EQ 0 OR nweight EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: st = obj->wcombine_sumstructs(sumstructs, weights)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF nsum EQ 1 THEN return, sumstructs
+
+  IF nweight NE nsum THEN message,'Weights must be same size as sumstructs'
+
+  ;; make sure floating point
+  wt = double(weights)
+
+  ;; make sure max is unity so the weight*counts gives the percentage of
+  ;; the counts to keep; just easier to think about
+  perc_keep = wt/max(wt)
+
+  IF tag_exist(sumstructs, 'ilumcounts') THEN BEGIN 
+      radlumcolor=1 
+      out= self->radlumcolor_sumstruct()
+  ENDIF ELSE BEGIN 
+      radlumcolor=0
+      out= self->rad_sumstruct()
+  ENDELSE 
+
+  nrad = n_elements(sumstructs[0].r)
+  radcounts = lon64arr(nrad)
+
+  FOR index=0L, nsum-1 DO BEGIN 
+
+      out.npoints = out.npoints + round(  sumstructs[index].npoints*perc_keep[index], /l64)
+
+      out.totpairs = out.totpairs + round( sumstructs[index].totpairs*perc_keep[index], /l64)
+  
+      out.rsum  = out.rsum + sumstructs[index].rsum*perc_keep[index]
+      out.rsum2 = out.rsum2 + sumstructs[index].rsum2*perc_keep[index]
+
+      out.counts = out.counts + round( sumstructs[index].counts*perc_keep[index], /l64)
+      
+      ;; need to do this here for precision issues in weighting
+      FOR ir=0L,nrad-1 DO BEGIN 
+          radcounts[ir] = total_int( sumstructs[index].counts[ir,*,*] )
+      ENDFOR 
+      out.radcounts = out.radcounts + round( radcounts*perc_keep[index], /l64)
+
+      IF radlumcolor THEN BEGIN 
+          out.kgflux = out.kgflux + sumstructs[index].kgflux*perc_keep[index]
+          out.krflux = out.krflux + sumstructs[index].krflux*perc_keep[index]
+          out.kiflux = out.kiflux + sumstructs[index].kiflux*perc_keep[index]
+          
+          out.kgflux2 = out.kgflux2 + sumstructs[index].kgflux2*perc_keep[index]
+          out.krflux2 = out.krflux2 + sumstructs[index].krflux2*perc_keep[index]
+          out.kiflux2 = out.kiflux2 + sumstructs[index].kiflux2*perc_keep[index]
+          
+          out.ilumcounts  = out.ilumcounts  + sumstructs[index].ilumcounts*perc_keep[index]
+          out.ilumcounts2 = out.ilumcounts2 + sumstructs[index].ilumcounts2*perc_keep[index]
+      ENDIF ELSE BEGIN 
+          out.totaldensity = out.totaldensity + sumstructs[index].totaldensity*perc_keep[index]
+      ENDELSE 
+  ENDFOR 
+
+
+
+  self->calc_sum_derived, out
+
+  return, out
+END 
+
+
+
+
+PRO correlate::sums2meanerr, xsum, x2sum, nx, xmean, xvar, xerr
+
+  IF n_params() LT 5 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: obj->sums2meanerr, xsum, x2sum, nx,  xmean, var, xerr'
+      print
+      message,'Halting'
+  ENDIF 
+  xmean = xsum/nx
+  xvar = (x2sum - 2.0*xmean*xsum + nx*xmean^2)/(nx-1.0)
+  xerr = sqrt(xvar/nx)
+
+END 
+
+PRO correlate::calc_adderr, x1, x1err, x2, x2err, res, err
+  res = x1+x2
+  err = sqrt( x1err^2 + x2err^2 )
+END 
+
+FUNCTION correlate::fluxerr2colorerr, f1mean, f1err, f2mean, f2err
+
+  IF n_params() LT 4 THEN BEGIN 
+      on_error,2
+      print,'-Syntax: cerr = obj->fluxerr2colorerr(f1mean,f1err,f2mean,f2err)'
+      print
+      message,'Halting'
+  ENDIF 
+  ;; sig_(r-i) = 2.5/ln(10) sqrt( sig_r^2/f_r^2 + sig_i^2/f_i^2 )
+  cerr = 2.5/alog(10.)*sqrt( (f1err/f1mean)^2 + (f2err/f2mean)^2 )
+  return, cerr
+END 
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Some derived quantities from the summed data
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+PRO correlate::calc_sum_derived, st
+
+  IF n_elements(st) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: co->calc_sum_derived, st'
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF tag_exist(st, 'ilumcounts') THEN BEGIN 
+      radlumcolor=1 
+  ENDIF ELSE BEGIN 
+      radlumcolor=0
+  ENDELSE 
+
+
+  nst = n_elements(st)
+  FOR j=0L, nst-1 DO BEGIN 
+
+      FOR i=0L, st[j].nrad-1 DO BEGIN 
+
+          ;; mean lum in all bins. Over primaries, so npoints here.
+          IF radlumcolor THEN BEGIN 
+              self->sums2meanerr, $
+                st[j].ilumcounts[i,*,*], st[j].ilumcounts2[i,*,*], st[j].npoints, tm, tv, terr
+              st[j].ilum[i,*,*] = tm
+              st[j].ilum_err[i,*,*] = terr
+              
+              st[j].radilum[i] = total( st[j].ilum[i,*,*] )
+              st[j].radilum_err[i] = sqrt( total(st[j].ilum_err[i,*,*]^2 ) )
+
+              ;; mean lum in radial bins.  We don't have enough precision to
+              ;; do it this way:
+              ;;self->sums2meanerr, $
+              ;;  total( st[j].ilumcounts[i,*,*] ), total( st[j].ilumcounts2[i,*,*] ), $
+              ;;  st[j].npoints, tm, tv, terr
+              ;;st[j].radilum[i] = tm
+              ;;st[j].radilum_err[i] = terr
+              
+              ;; Luminosity density in all bins and radial bins
+              st[j].ilumdens[i,*,*] = st[j].ilum[i,*,*]/st[j].area[i]
+              st[j].ilumdens_err[i,*,*] = st[j].ilum_err[i,*,*]/st[j].area[i]
+              
+              st[j].radilumdens[i] = st[j].radilum[i]/st[j].area[i]
+              st[j].radilumdens_err[i] = st[j].radilum_err[i]/st[j].area[i]
+
+              ;; Number density over all rad,lum,color bins. 
+              dcounts = double( st[j].counts[i,*,*] )
+              st[j].numdens[i,*,*]     = dcounts/st[j].npoints/st[j].area[i]
+              st[j].numdens_err[i,*,*] = sqrt(dcounts)/st[j].npoints/st[j].area[i]
+
+          ENDIF 
+
+          ;; This is not mean per primary!  This notation works over simple radial
+          ;; bins too
+;          st[j].radcounts[i] = total_int( st[j].counts[i,*,*] )
+
+          IF NOT radlumcolor THEN BEGIN 
+              IF st[j].totaldensity GT 0 THEN BEGIN 
+                  st[j].usedarea[i] = st[j].radcounts[i]/st[j].totaldensity
+                  st[j].usedarea_err[i] = sqrt(st[j].radcounts[i])/st[j].totaldensity
+              ENDIF 
+          ENDIF 
+
+          ;; now mean over primaries
+          dradcounts = double( st[j].radcounts[i] )
+          st[j].radnumdens[i] = dradcounts/st[j].npoints/st[j].area[i]
+          st[j].radnumdens_err[i] = sqrt(dradcounts)/st[j].npoints/st[j].area[i]
+
+
+          ;; Mean radius *per secondary* not per primary.
+          self->sums2meanerr, $
+            st[j].rsum[i], st[j].rsum2[i], st[j].radcounts[i], tm, tv, terr
+          st[j].r[i] = tm
+          st[j].r_err[i] = terr
+
+          
+
+
+      ENDFOR 
+
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ;; Mean total color and error
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+      IF radlumcolor THEN BEGIN 
+          self->sums2meanerr, st[j].kgflux, st[j].kgflux2, st[j].npoints, kgfluxmean, var, kgfluxerr
+          self->sums2meanerr, st[j].krflux, st[j].krflux2, st[j].npoints, krfluxmean, var, krfluxerr
+          self->sums2meanerr, st[j].kiflux, st[j].kiflux2, st[j].npoints, kifluxmean, var, kifluxerr
+          
+          st[j].kgmr = -2.5*alog10( st[j].kgflux/st[j].krflux )
+          st[j].kgmr_err = self->fluxerr2colorerr(kgfluxmean, kgfluxerr, krfluxmean, krfluxerr )
+          
+          st[j].krmi = -2.5*alog10( st[j].krflux/st[j].kiflux )
+          st[j].krmi_err = self->fluxerr2colorerr(krfluxmean, krfluxerr, kifluxmean, kifluxerr )
+      ENDIF 
+
+  ENDFOR 
+
+END 
+
+
+FUNCTION correlate::calc_totaldensity, z, secondary_randnum=secondary_randnum
+
+  IF n_elements(z) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: td = c->calc_totaldensity(z, secondary_randnum=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  par = self->par_struct()
+
+  ;; number of secondaries per steradian
+  sdens = self->secondary_density(secondary_randnum=secondary_randnum)
+
+  DA = angdist_lambda( z, omegam=par.omega_m, h=par.h ) ; Mpc
+  totaldensity = sdens*total(1.0/DA^2, /double)
+  return, totaldensity
+
+END 
+
+FUNCTION correlate::radlumcolor_base_struct
+  par = self->par_struct()
+  st = { $
+         index: 0L, $
+         totpairs: 0L, $
+         rsum: fltarr(par.nrad), $
+         kgflux: fltarr(par.nrad), $
+         krflux: fltarr(par.nrad), $,
+         kiflux: fltarr(par.nrad), $
+         counts: lonarr(par.nrad, par.nlum, par.nkgmr), $
+         ilum: fltarr(par.nrad, par.nlum, par.nkgmr) $
+       }
+  return, st
+END 
+FUNCTION correlate::read_chunk, lun, base_struct, num
+
+
+  IF n_params() LT 3 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: st = c->read_chunk(lun, base_struct, num)'
+      print
+      message,'Halting'
+  ENDIF 
+  out = replicate(base_struct, num)
+  readu, lun, out
+
+  return, out
+
+END 
+
+
+
+;; This is written assuming that, most of the time, we are interested
+;; in most of the file.  
+PRO correlate::_process_subset_requests, nrows, rowsin, keeparray, rows, st, rows_input, keep_input
+
+  rows_input=0
+  keep_input=0
+  IF n_elements(keeparray) NE 0 THEN BEGIN 
+      nbin = n_elements(keeparray)
+      FOR i=0L, nbin-1 DO BEGIN
+          rmd = rem_dup(*keeparray[i])
+          IF n_elements(rmd) NE n_elements(*keeparray[i]) THEN BEGIN 
+              message,'keeparray['+ntostr(i)+'] is not unique'
+          ENDIF 
+          kmin = min(*keeparray[i], max=kmax)
+          IF kmin LT 0 OR kmin GE nrows THEN BEGIN 
+              message,'keeparray['+ntostr(i)+'] is out of range [0,'+ntostr(nrows-1)+']'
+          ENDIF 
+      ENDFOR 
+
+      st = replicate(st, nbin)
+      keep_input = 1
+  ENDIF ELSE IF n_elements(rowsin) NE 0 THEN BEGIN 
+      w=where(rowsin LT 0 OR rowsin GE nrows, nw)
+      IF nw NE 0 THEN message,'input rows out of range [0,'+ntostr(nrows-1)+']'
+
+      ;; will also sort
+      rows = rowsin[ rem_dup(rowsin) ]
+      rows_input = 1
+  ENDIF 
+
+
+END 
+
+FUNCTION correlate::sum_radlumcolor_output, file, rows=rowsin, keeparray=keeparray
+
+
+  IF n_elements(file) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: sumstruct = c->sum_radlumcolor_output(file, rows=, keeparray=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  t0 = systime(1)
+
+  ;; Get the output structure
+  st = self->radlumcolor_sumstruct()
+
+
+  ;; open the file
+  openr, lun, file, /get_lun
+
+  ;; Read the header
+  hdr = read_idlheader(lun)
+  nrows = hdr.nrows
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Deal with requested subsets
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  self->_process_subset_requests, nrows, rowsin, keeparray, rows, st, rows_input, keep_input
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Split into chunks
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  chunk = 10000L
+
+  chunkdiv = nrows/chunk
+  chunkmod = nrows MOD chunk
+
+  IF chunkdiv NE 0 THEN BEGIN 
+      nchunk = chunkdiv
+      nleft = chunkmod
+  ENDIF ELSE BEGIN 
+      nchunk = 0
+      nleft = nrows
+  ENDELSE 
+
+  print
+  print,'Summing rows from file '+file  
+  print
+  print,'Chunksize = ',chunk
+  print,'Nchunk    = ',nchunk
+  print,'Remainder = ',nleft
+
+
+  base_struct = self->radlumcolor_base_struct()
+
+  ;; Read and sum the chunks
+  beg = 0L
+  nchstr = '/'+ntostr(nchunk)
+  indices = lindgen(nrows)
+
+
+  FOR i=0L, nchunk-1 DO BEGIN 
+      IF i EQ 0 THEN BEGIN 
+          print,'  Reading Chunk: '+ntostr(i+1)+nchstr, format='($,a)'
+      ENDIF ELSE BEGIN 
+          print,' '+ntostr(i+1)+nchstr, format='($,a)'
+      ENDELSE 
+
+      tmp = self->read_chunk(lun, base_struct, chunk)
+
+      print,'*',format='($,a)'
+
+      IF keep_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+chunk-1]
+          self->_sum_match_keeparray, tmp, matchid, keeparray, st
+      ENDIF ELSE IF rows_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+chunk-1]
+          self->_sum_match_rows, tmp, matchid, rows, st
+      ENDIF ELSE BEGIN 
+          self->_sum_output, tmp, st
+      ENDELSE 
+
+      tmp = 0
+      beg = beg+chunk
+  ENDFOR 
+
+  IF nleft NE 0 THEN BEGIN 
+      print,'  Reading remainder',format='($,a)'
+
+      tmp = self->read_chunk(lun, base_struct, nleft)
+      print,'*',format='($,a)'
+
+      IF keep_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+nleft-1]
+          self->_sum_match_keeparray, tmp, matchid, keeparray, st
+      ENDIF ELSE IF rows_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+nleft-1]
+          self->_sum_match_rows, tmp, matchid, rows, st
+      ENDIF ELSE BEGIN 
+          self->_sum_output, tmp, st
+      ENDELSE 
+      print
+
+      tmp = 0
+  ENDIF 
+
+  free_lun, lun
+
+  ;; Some derived quantities
+  self->calc_sum_derived, st
+
+  ptime,systime(1)-t0
+
+  return, st
+
+END 
+
+
+
+FUNCTION correlate::sum_radlumcolor_pairs, file, rows=rowsin, keeparray=keeparray
+
+
+  IF n_elements(file) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: sumstruct = c->sum_radlumcolor_output(file, rows=, keeparray=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  t0 = systime(1)
+
+  ;; Get the output structure
+  st = self->radlumcolor_sumstruct()
+
+
+  ;; open the file
+  openr, lun, file, /get_lun
+
+  ;; Read the header
+  hdr = read_idlheader(lun)
+  nrows = hdr.nrows
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Deal with requested subsets
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  self->_process_subset_requests, nrows, rowsin, keeparray, rows, st, rows_input, keep_input
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Split into chunks
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  chunk = 10000L
+
+  chunkdiv = nrows/chunk
+  chunkmod = nrows MOD chunk
+
+  IF chunkdiv NE 0 THEN BEGIN 
+      nchunk = chunkdiv
+      nleft = chunkmod
+  ENDIF ELSE BEGIN 
+      nchunk = 0
+      nleft = nrows
+  ENDELSE 
+
+  print
+  print,'Summing rows from file '+file  
+  print
+  print,'Chunksize = ',chunk
+  print,'Nchunk    = ',nchunk
+  print,'Remainder = ',nleft
+
+
+  base_struct = self->radlumcolor_base_struct()
+
+  ;; Read and sum the chunks
+  beg = 0L
+  nchstr = '/'+ntostr(nchunk)
+  indices = lindgen(nrows)
+
+
+  FOR i=0L, nchunk-1 DO BEGIN 
+      IF i EQ 0 THEN BEGIN 
+          print,'  Reading Chunk: '+ntostr(i+1)+nchstr, format='($,a)'
+      ENDIF ELSE BEGIN 
+          print,' '+ntostr(i+1)+nchstr, format='($,a)'
+      ENDELSE 
+
+      tmp = self->read_chunk(lun, base_struct, chunk)
+
+      print,'*',format='($,a)'
+
+      IF keep_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+chunk-1]
+          self->_sum_match_keeparray, tmp, matchid, keeparray, st
+      ENDIF ELSE IF rows_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+chunk-1]
+          self->_sum_match_rows, tmp, matchid, rows, st
+      ENDIF ELSE BEGIN 
+          self->_sum_output, tmp, st
+      ENDELSE 
+
+      tmp = 0
+      beg = beg+chunk
+  ENDFOR 
+
+  IF nleft NE 0 THEN BEGIN 
+      print,'  Reading remainder',format='($,a)'
+
+      tmp = self->read_chunk(lun, base_struct, nleft)
+      print,'*',format='($,a)'
+
+      IF keep_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+nleft-1]
+          self->_sum_match_keeparray, tmp, matchid, keeparray, st
+      ENDIF ELSE IF rows_input THEN BEGIN 
+          ;; matchid matches up with the chunk we have read
+          matchid = indices[beg:beg+nleft-1]
+          self->_sum_match_rows, tmp, matchid, rows, st
+      ENDIF ELSE BEGIN 
+          self->_sum_output, tmp, st
+      ENDELSE 
+      print
+
+      tmp = 0
+  ENDIF 
+
+  free_lun, lun
+
+  ;; Some derived quantities
+  self->calc_sum_derived, st
+
+  ptime,systime(1)-t0
+
+  return, st
+
+END 
+
+
+
+FUNCTION correlate::get_pair_index, file
+
+  openr, lun, file, /get_lun
+
+  nrows = 0L
+  readu, lun, nrows
+
+  print,'nrows = ',nrows
+
+  nrows=nrows-1
+  st = {index:0L, npairs:0L}
+  st = replicate(st, nrows)
+
+  readu, lun, st
+  free_lun, lun
+  return, st
+
+END 
+
+
+
+
+
+
+FUNCTION correlate::sum_rad_output, file, rows=rowsin, keeparray=keeparray
+
+  IF n_elements(file) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: sumstruct = c->sum_rad_output(file, rows=, keeparray=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  st = self->rad_sumstruct()
+
+  hdr = read_idlheader(file)
+  nrows = hdr.nrows
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Deal with requested subsets
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  self->_process_subset_requests, nrows, rowsin, keeparray, rows, st, rows_input, keep_input  
+
+  print
+  print,'Reading file: ',file
+  struct = read_idlstruct(file, status=status)
+  IF status NE 0 THEN message,'Failed to read file'
+  IF keep_input THEN BEGIN 
+      indices = lindgen(nrows)
+      self->_sum_match_keeparray, struct, indices, keeparray, st
+  ENDIF ELSE IF rows_input THEN BEGIN 
+      struct = struct[rows]
+      self->_sum_output, struct, st
+  ENDIF ELSE BEGIN 
+      self->_sum_output, struct, st
+  ENDELSE 
+
+  ;; Some derived quantities
+  self->calc_sum_derived, st
+
+  return, st
+END
+
+
+
+
+
+
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Perform subsampling
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;; This will take a set of redshifts, bin according to the rz binning for this
+;; sample, and return the indices in each bin.  
+
+FUNCTION correlate::rzsub_hist, rz, reverse_indices=reverse_indices
+  IF n_elements(rz) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'hist = corr->rzsub_hist(z, reverse_indices=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  rzinfo = self->rzsub_info()
+  h = histogram(rz, min=rzinfo.rzmin, max=rzinfo.rzmax, binsize=rzinfo.rzstep, $
+                reverse_indices=reverse_indices)
+
+  nh = n_elements(h)
+  IF nh LT rzinfo.nrz THEN message,'Found '+ntostr(nh)+' bins, expecting at least '+ntostr(rzinfo.nrz)
+
+  ;; There is always one last bin we don't want
+  return, h[0:rzinfo.nrz-1]
+END 
+FUNCTION correlate::rzsub_indices, rz, hist=hist
+
+  IF n_elements(rz) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'keeparray = corr->rzsub_indices(z, hist=)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  hist = self->rzsub_hist(rz, rev=rev)
+
+  nbin = n_elements(hist)
+  keep = ptrarr(nbin)
+
+  FOR i=0L, nbin-1 DO BEGIN 
+
+      IF rev[i] NE rev[i+1] THEN BEGIN 
+          w = rev[ rev[i]:rev[i+1]-1 ]
+          hist[i] = n_elements(w)
+          keep[i] = ptr_new(w, /no_copy)
+      ENDIF 
+
+  ENDFOR 
+
+  return, keep
+END 
+
+;; This is just for doing the redshift subsampling for rz and rr
+PRO correlate::rzsub_sample, type, $
+             primary_randnum=primary_randnum, $
+             secondary_randnum=secondary_randnum
+
+  CASE strlowcase(type) OF
+      'rd': BEGIN 
+
+          nrand = n_elements(primary_randnum) 
+          IF nrand EQ 0 THEN message,'You must enter a primary_randnum for "rd"'
+
+          FOR i=0L, nrand-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+              
+              rfile = self->corrfile('rd', 'output', primary_randnum=primary_randnum[i])
+              
+              outfiles = $
+                self->corrfile('rd', 'rzsub', primary_randnum=primary_randnum[i], $
+                               /createdir)
+              
+              rcorrin = self->corr_read('primary_random','input',primary_randnum=primary_randnum[i])
+
+              print
+              print,'Sub sampling into rzsub redshift bins'
+              rkeep = self->rzsub_indices(rcorrin.z)
+
+              ;; combine the sub samples
+              sumstructs = self->sum_radlumcolor_output(rfile, keeparray=rkeep)
+              
+              ;; write the outputs
+              self->objshear::write_sub_samples, sumstructs, outfiles
+
+              ptr_free, rkeep
+
+          ENDFOR 
+
+      END 
+      'rr': BEGIN 
+
+          nprand = n_elements(primary_randnum) 
+          nsrand = n_elements(secondary_randnum)
+
+          ;; These must pair up
+          IF nprand EQ 0 THEN message,'You must enter a primary_randnum for "rr"'
+          IF nsrand EQ 0 THEN message,'You must enter a secondary_randnum for "rr"'
+
+          IF nprand NE nsrand THEN message,'primary_randnum and secondary_randnum must be same size'
+
+
+          FOR i=0L, nprand-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+              print,'prand = '+ntostr(primary_randnum[i])+' srand = '+ntostr(secondary_randnum[i])
+              rfile = self->corrfile('rr', 'output', $
+                                     primary_randnum=primary_randnum[i], $
+                                     secondary_randnum=secondary_randnum[i])
+
+              outfiles = $
+                self->corrfile('rr', 'rzsub', $
+                               primary_randnum=primary_randnum[i], $
+                               secondary_randnum=secondary_randnum[i], $
+                               /createdir)
+
+              rcorrin = self->corr_read('primary_random','input',$
+                                        primary_randnum=primary_randnum[i])
+
+              print
+              print,'Sub sampling into rzsub redshift bins'
+              rkeep = self->rzsub_indices(rcorrin.z)
+
+              ;; combine the sub samples
+              sumstructs = self->sum_rad_output(rfile, keeparray=rkeep)
+
+              ;; Get the total density
+              nbin = n_elements(sumstructs)
+              FOR j=0L, nbin-1 DO BEGIN 
+                  ind = *rkeep[j]
+                  sumstructs[j].totaldensity = $
+                    self->calc_totaldensity(rcorrin[ind].z, $
+                                            secondary_randnum=secondary_randnum[i])
+                  sumstructs[j].usedarea = $
+                    sumstructs[j].radcounts/sumstructs[j].totaldensity
+                  sumstructs[j].usedarea_err = $
+                    sqrt(sumstructs[j].radcounts)/sumstructs[j].totaldensity
+              ENDFOR 
+
+              
+              ;; write the outputs
+              self->objshear::write_sub_samples, sumstructs, outfiles
+
+              ptr_free, rkeep
+          ENDFOR 
+
+
+
+      END 
+      ELSE: message,'rzsub_sample works only with "rd" and "rr"'
+  ENDCASE 
+
+END 
+
+;; Combine all the randoms for each rzbin
+FUNCTION correlate::get_rzsubs, type
+
+  rzinfo = self->rzsub_info()
+  CASE strlowcase(type) OF
+      'rd': BEGIN 
+          rzsubs = replicate(self->radlumcolor_sumstruct(), rzinfo.nrz)
+          rztype = 'rd_rzsub'
+      END 
+      'rr': BEGIN 
+          rzsubs = replicate(self->rad_sumstruct(), rzinfo.nrz)
+          rztype = 'rr_rzsub'
+      END 
+      ELSE: message,'type must be rd or rr'
+  ENDCASE 
+
+  FOR rzbin=0,rzinfo.nrz-1 DO BEGIN 
+      rfiles = self->list_random(rztype, rzbin=rzbin)
+      tmp = read_idlstruct_multi(rfiles)
+      rzsubs[rzbin] = self->combine_sumstructs(tmp)
+  ENDFOR 
+  return, rzsubs
+END 
+
+
+;; Return the weight needed such that two histograms have the same shape
+;; For us, h1 will be the redshifts we want to match, h2 will be randoms
+FUNCTION correlate::match_hist_weight, h1, h2
+
+  n1 = n_elements(h1)
+  n2 = n_elements(h2)
+
+  IF n1 EQ 0 OR n2 EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: w = corr->match_hist_weight(h1, h2)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF n1 NE n2 THEN message,'Two histograms must be same size'
+
+  wh = where(h1 GT 0 AND h2 GT 0, ngood)
+
+  IF ngood EQ 0 THEN BEGIN 
+      message,'No good values found in histograms'
+  ENDIF 
+
+  ;; The percentage of x2 to keep in each bin
+  perc_keep = fltarr(n1)
+  ratio = fltarr(n1)
+
+  ;; normalize by the maximum in x1 histogram
+  ratio[wh] = double( h1[wh] )/double( h2[wh] )
+  maxratio = max(ratio)
+
+  ;; The percentage to keep
+  perc_keep[wh] = ratio[wh]/maxratio
+
+  return, perc_keep
+
+END 
+
+
+FUNCTION correlate::rzsub_match, z, keep, rzsubs
+
+  IF n_params() LT 3 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: sums = corr->rzsub_match(z, keep, rzsubs)'
+  ENDIF 
+  nbin = n_elements(keep)
+
+  IF keyword_set(radlumcolor) THEN BEGIN 
+      out = self->radlumcolor_sumstruct()
+  ENDIF ELSE BEGIN 
+      out = self->rad_sumstruct()
+  ENDELSE 
+  out = replicate(out, nbin)
+
+  ;; The number of points used is just the redshift histogram
+  rzh = rzsubs.npoints
+
+  FOR i=0L, nbin-1 DO BEGIN 
+
+      ind = *keep[i]
+      zh = self->rzsub_hist(z[ind])
+
+      weight = self->match_hist_weight(zh, rzh)
+
+      plot, zh/total(zh), psym=10
+      oplot, rzh*weight/total(rzh*weight), color=!green, psym=10, line=2
+      key = prompt_kbrd('hit a key')
+
+      tout = self->wcombine_sumstructs(rzsubs, weight)
+
+      IF i EQ 0 THEN BEGIN 
+          out = replicate(tout, nbin)
+      ENDIF 
+      out[i] = tout
+  ENDFOR 
+
+  return, out
+END 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FUNCTION correlate::get_input_index, inputstruct
+  IF tag_exist(inputstruct, 'bcg_id', ind=ind) THEN BEGIN 
+      return, ind
+  ENDIF ELSE IF tag_exist(inputstruct, 'index', ind=ind) THEN BEGIN 
+      return, ind
+  ENDIF ELSE BEGIN 
+      message,'No index found'
+  ENDELSE 
+END 
+
+
+
+
+;; This is for sub-sampling relative to the primaries.
+;; There is another sub-sampler for sub-sampling the random
+;; redshifts into redshift bins, see above.
+PRO correlate::sub_sample, type, subtype, $
+             average_tags=average_tags, $
+             zbinsize=zbinsize
+
+  IF n_elements(type) EQ 0 OR n_elements(subtype) EQ 0 THEN BEGIN 
+      message,'You must enter the type and subtype strings'
+  ENDIF 
+
+  ;; main catalog
+  struct = self->get()
+
+  ;; lens input file. Just to make sure input and output are the same size
+  corrin = self->corr_read('primary','input')
+  
+  ;; only need those that made it into the lens input catalogs
+  indind = self->get_input_index(corrin)
+  index = corrin.(indind)
+  struct = struct[index]
+  
+  keep = self->objshear::where_select(struct, subtype, nkeep=nkeep, nbin=nbin)
+
+  CASE strlowcase(type) OF
+      'dd': BEGIN 
+          ;; will autumatically select all bins
+          file = self->corrfile('dd', 'output')
+          outfiles = self->corrfile(type, 'combined', subtype=subtype, /createdir)
+          
+          ;; combine the sub samples
+          sumstructs = self->sum_radlumcolor_output(file, keeparray=keep)
+          
+          ;; write the outputs
+          self->objshear::write_sub_samples, sumstructs, outfiles
+          
+      END 
+
+      'dr': BEGIN 
+
+          drfiles = self->list_random('dr', count=nfiles)
+
+          starray = replicate( self->rad_sumstruct(), nfiles, nbin )
+
+          
+          FOR i=0L, nfiles-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+              file = drfiles[i]
+
+              secondary_randnum = long( stregex(file,'[0-9][0-9].st',/extract) )
+
+              print,'Secondary randnum = ',secondary_randnum
+              ;; combine the sub samples
+              sumstructs = self->sum_rad_output(file, keeparray=keep)
+
+              ;; Get the total density
+              FOR j=0L, nbin-1 DO BEGIN 
+                  ind = *keep[j]
+                  sumstructs[j].totaldensity = $
+                    self->calc_totaldensity(corrin[ind].z, $
+                                            secondary_randnum=secondary_randnum)
+                  sumstructs[j].usedarea = $
+                    sumstructs[j].radcounts/sumstructs[j].totaldensity
+                  sumstructs[j].usedarea_err = $
+                    sqrt(sumstructs[j].radcounts)/sumstructs[j].totaldensity
+              ENDFOR 
+
+              starray[i,*] = sumstructs
+
+          ENDFOR 
+
+          sumstructs = replicate( self->rad_sumstruct(), nbin)
+          FOR i=0L, nbin-1 DO BEGIN 
+              sumstructs[i] = self->combine_sumstructs(starray[*,i])
+          ENDFOR 
+
+          ;; write the outputs
+          outfiles = self->corrfile('dd', 'matchdr', subtype=subtype, /createdir)
+          self->objshear::write_sub_samples, sumstructs, outfiles
+
+
+      END 
+
+
+
+
+
+
+
+
+
+      ;; These require histogram matching
+      'rd': BEGIN 
+
+          ;; Start a plot
+          pdir = self->plotdir(subtype=subtype,/matchzrand,/createdir)
+          psfile = 'rd_'+self->sample('dd')+'_'+subtype+'_matchzrand_N1.ps'
+          psfile = concat_dir(pdir, psfile)
+
+          ;; don't overwrite
+          WHILE fexist(psfile) DO psfile=newname(psfile)
+          
+          begplot,name=psfile, /color
+          !p.multi = [0,0,2]
+
+
+          ;; Get all the randoms in each rzbin, total them up.
+          print,'Combining rzsubs'
+          rzsubs = self->get_rzsubs('rd')
+
+          ;; Now combine over rzbins with the appropriate weight
+          print
+          print,'Matching redshift histograms'
+          sumstructs = self->rzsub_match(corrin.z, keep, rzsubs)
+
+          
+          ;; write the outputs
+          outfiles = self->corrfile('dd', 'matchrd', subtype=subtype, /createdir)
+
+          self->objshear::write_sub_samples, sumstructs, outfiles
+
+
+          !p.multi=0
+          endplot
+
+      END 
+
+      'rr': BEGIN 
+
+          ;; Start a plot
+          pdir = self->plotdir(subtype=subtype,/matchzrand,/createdir)
+          psfile = 'rr_'+self->sample('dd')+'_'+subtype+'_matchzrand_N1.ps'
+          psfile = concat_dir(pdir, psfile)
+
+          ;; don't overwrite
+          WHILE fexist(psfile) DO psfile=newname(psfile)
+          
+          begplot,name=psfile, /color
+          !p.multi = [0,0,2]
+
+
+
+          ;; Get all the randoms in each rzbin, total them up.
+          print,'Combining rzsubs'
+          rzsubs = self->get_rzsubs('rr')
+
+          ;; Now combine over rzbins with the appropriate weight
+          print
+          print,'Matching redshift histograms'
+          sumstructs = self->rzsub_match(corrin.z, keep, rzsubs)
+
+          
+          ;; write the outputs
+          outfiles = self->corrfile('dd', 'matchrr', subtype=subtype, /createdir)
+
+          self->objshear::write_sub_samples, sumstructs, outfiles
+
+
+          !p.multi=0
+          endplot
+
+
+      END 
+
+
+
+
+
+
+
+      ELSE: message,'type not supported: '+ntostr(type)
+  ENDCASE 
+
+
+  ptr_free, keep
+
+
+END 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;; This is for sub-sampling relative to the primaries.
+;; There is another sub-sampler for sub-sampling the random
+;; redshifts into redshift bins, see above.
+PRO correlate::sub_sample_old, type, subtype, $
+             primary_randnum=primary_randnum, $
+             secondary_randnum=secondary_randnum, $
+             average_tags=average_tags, $
+             zbinsize=zbinsize
+
+  IF n_elements(type) EQ 0 OR n_elements(subtype) EQ 0 THEN BEGIN 
+      message,'You must enter the type and subtype strings'
+  ENDIF 
+
+  ;; main catalog
+  struct = self->get()
+
+  ;; lens input file. Just to make sure input and output are the same size
+  corrin = self->corr_read('primary','input')
+  
+  ;; only need those that made it into the lens input catalogs
+  indind = self->get_input_index(corrin)
+  index = corrin.(indind)
+  struct = struct[index]
+  
+  keep = self->objshear::where_select(struct, subtype, nkeep=nkeep, nbin=nbin)
+
+  CASE strlowcase(type) OF
+      'dd': BEGIN 
+          ;; will autumatically select all bins
+          file = self->corrfile('dd', 'output')
+          outfiles = self->corrfile(type, 'combined', subtype=subtype, /createdir)
+          
+          ;; combine the sub samples
+          sumstructs = self->sum_radlumcolor_output(file, keeparray=keep)
+          
+          ;; write the outputs
+          self->objshear::write_sub_samples, sumstructs, outfiles
+          
+      END 
+
+      'dr': BEGIN 
+
+          nrand = n_elements(secondary_randnum) 
+          IF nrand EQ 0 THEN message,'You must enter a secondary_randnum for "dr"'
+          
+          FOR i=0L, nrand-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+
+              rfile = self->corrfile('dr', 'output', secondary_randnum=secondary_randnum[i])
+
+              outfiles = $
+                self->corrfile('dd', 'matchdr', subtype=subtype, secondary_randnum=secondary_randnum[i], $
+                               /createdir)
+
+
+              ;; combine the sub samples
+              sumstructs = self->sum_rad_output(rfile, keeparray=keep)
+
+              ;; Get the total density
+              FOR j=0L, nbin-1 DO BEGIN 
+                  ind = *keep[j]
+                  sumstructs[j].totaldensity = $
+                    self->calc_totaldensity(corrin[ind].z, $
+                                            secondary_randnum=secondary_randnum[i])
+                  sumstructs[j].usedarea = $
+                    sumstructs[j].radcounts/sumstructs[j].totaldensity
+                  sumstructs[j].usedarea_err = $
+                    sqrt(sumstructs[j].radcounts)/sumstructs[j].totaldensity
+              ENDFOR 
+
+              ;; write the outputs
+              self->objshear::write_sub_samples, sumstructs, outfiles
+
+          ENDFOR 
+
+      END 
+
+
+
+
+
+
+
+
+
+      ;; These require histogram matching
+      'rd': BEGIN 
+
+          ;; Start a plot
+          pdir = self->plotdir(subtype=subtype,/createdir)
+          pdir = concat_dir(pdr, 'matchzrand')
+          psfile = 'rd_'+self->sample('dd')+'_'+subtype+'_matchzrand_N1.ps'
+          psfile = concat_dir(pdir, psfile)
+
+          ;; don't overwrite
+          WHILE fexist(psfile) DO psfile=newname(psfile)
+          
+          begplot,name=psfile, /color
+          !p.multi = [0,0,2]
+
+
+          nrand = n_elements(primary_randnum) 
+          IF nrand EQ 0 THEN message,'You must enter a primary_randnum for "rd"'
+          
+          FOR i=0L, nrand-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+              
+              rfile = self->corrfile('rd', 'output', primary_randnum=primary_randnum[i])
+
+              outfiles = $
+                self->corrfile('dd', 'matchrd', subtype=subtype, primary_randnum=primary_randnum[i], $
+                               /createdir)
+
+              rcorrin = self->corr_read('primary_random','input',primary_randnum=primary_randnum[i])
+
+              ;; Send corrin, may need redshifts
+              print
+              print,'Matching redshift histograms'
+              rkeep = self->objshear::rand_match_bins(corrin, rcorrin, keep, /zhist,$
+                                                      zbinsize=zbinsize)
+
+              ;; combine the sub samples
+              sumstructs = self->sum_radlumcolor_output(rfile, keeparray=rkeep)
+              
+              ;; write the outputs
+              self->objshear::write_sub_samples, sumstructs, outfiles
+
+              ptr_free, rkeep
+          ENDFOR 
+
+
+          !p.multi=0
+          endplot
+
+      END 
+
+      'rr': BEGIN 
+
+          ;; Start a plot
+          pdir = self->plotdir(subtype=subtype,/createdir)
+          pdir = concat_dir(pdr, 'matchzrand')
+          psfile = 'rr_'+self->sample('dd')+'_'+subtype+'_matchzrand_N1.ps'
+          psfile = concat_dir(pdir, psfile)
+
+          ;; don't overwrite
+          WHILE fexist(psfile) DO psfile=newname(psfile)
+          
+          begplot,name=psfile, /color
+          !p.multi = [0,0,2]
+
+
+          nprand = n_elements(primary_randnum) 
+          nsrand = n_elements(secondary_randnum)
+
+          ;; These must pair up
+          IF nprand EQ 0 THEN message,'You must enter a primary_randnum for "rr"'
+          IF nsrand EQ 0 THEN message,'You must enter a secondary_randnum for "rr"'
+
+          IF nprand NE nsrand THEN message,'primary_randnum and secondary_randnum must be same size'
+
+          FOR i=0L, nprand-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+              print,'prand = '+ntostr(primary_randnum[i])+' srand = '+ntostr(secondary_randnum[i])
+              rfile = self->corrfile('rr', 'output', $
+                                     primary_randnum=primary_randnum[i], $
+                                     secondary_randnum=secondary_randnum[i])
+
+              outfiles = $
+                self->corrfile('dd', 'matchrr', subtype=subtype, $
+                               primary_randnum=primary_randnum[i], $
+                               secondary_randnum=secondary_randnum[i], $
+                               /createdir)
+
+              rcorrin = self->corr_read('primary_random','input',$
+                                        primary_randnum=primary_randnum[i])
+
+              ;; Send corrin, may need redshifts
+              print
+              print,'Matching redshift histograms'
+              rkeep = self->objshear::rand_match_bins(corrin, rcorrin, keep, /zhist,$
+                                                      zbinsize=zbinsize)
+
+
+              ;; combine the sub samples
+              sumstructs = self->sum_rad_output(rfile, keeparray=rkeep)
+
+              ;; Get the total density
+              FOR j=0L, nbin-1 DO BEGIN 
+                  ind = *rkeep[j]
+                  sumstructs[j].totaldensity = $
+                    self->calc_totaldensity(rcorrin[ind].z, $
+                                            secondary_randnum=secondary_randnum[i])
+                  sumstructs[j].usedarea = $
+                    sumstructs[j].radcounts/sumstructs[j].totaldensity
+                  sumstructs[j].usedarea_err = $
+                    sqrt(sumstructs[j].radcounts)/sumstructs[j].totaldensity
+              ENDFOR 
+
+              
+              ;; write the outputs
+              self->objshear::write_sub_samples, sumstructs, outfiles
+
+              ptr_free, rkeep
+          ENDFOR 
+
+
+          !p.multi=0
+          endplot
+
+      END 
+
+
+
+
+
+
+
+      ELSE: message,'type not supported: '+ntostr(type)
+  ENDCASE 
+
+
+  ptr_free, keep
+
+
+END 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FUNCTION correlate::model_usedarea, struct, max_model_rad, max_use_rad
+
+  IF n_params() LT 3 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: struct = c->model_usedarea(structarray, max_model_rad, max_use_rad)'
+      print,'Returns a copy of input struct with modeled usedarea for small radii'
+      print
+      message,'Halting'
+  ENDIF 
+
+  degree = 5
+  nst = n_elements(struct)
+  newstruct = struct
+
+
+  FOR i=0L, nst-1 DO BEGIN 
+
+      ;; Get radii
+      r = struct[i].r
+      wfit = where(r LT max_model_rad, nwfit)
+      IF nwfit EQ 0 THEN message,'No good model radii for i='+ntostr(i)
+
+      wuse = where(r LT max_use_rad, nwuse)
+      IF nwuse EQ 0 THEN message,'No good use radii for i='+ntostr(i)
+
+      fa = struct[i].usedarea/struct[i].area
+      faerr = struct[i].usedarea_err/struct[i].area
+
+      ;; Fit polynumial
+      res = FitAreaPoly(r[wfit], fa[wfit], faerr[wfit], degree=degree, yfit=yfit)
+
+      ;; Fix the usedarea
+      newstruct[i].usedarea[wuse] = yfit[wuse]*struct[i].area[wuse]
+
+      ;; Plot the result
+      rp = arrscl( findgen(1000), min(r[wuse]), max(r[wuse]) )
+      yfit = AreaPoly(rp, res)
+
+      pplot, r, fa, yerr=faerr, psym=8, /xlog, aspect=1.0
+      oplot, rp, yfit, thick=2, color=!darkGreen
+      key = prompt_kbrd('hit a key')
+
+  ENDFOR 
+
+  return, newstruct
+
+END 
+FUNCTION correlate::model_usedarea_plotfile, subtype=subtype
+  pdir = self->plotdir(subtype=subtype,/createdir)
+  psfile = 'model_usedarea_dr_'+self->sample('dd')
+  IF n_elements(subtype) NE 0 THEN psfile = psfile +'_'+subtype
+  psfile = psfile + '.ps'
+  psfile = concat_dir(pdir, psfile)
+  return, psfile
+END 
+
+
+
+FUNCTION correlate::_correct, dd, rd, dr, rr
+
+  IF n_params() LT 4 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: corrstruct = c->_correct(dd, rd, dr, rr)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  st = self->radlumcolor_sumstruct(/corrected)
+
+  copy_struct, dd, st
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Get the mean color and error
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  self->sums2meanerr, dd.kgflux, dd.kgflux2, dd.npoints, dd_kgf, v, dd_kgferr
+  self->sums2meanerr, dd.krflux, dd.krflux2, dd.npoints, dd_krf, v, dd_krferr
+  self->sums2meanerr, dd.kiflux, dd.kiflux2, dd.npoints, dd_kif, v, dd_kiferr
+
+  self->sums2meanerr, rd.kgflux, rd.kgflux2, rd.npoints, rd_kgf, v, rd_kgferr
+  self->sums2meanerr, rd.krflux, rd.krflux2, rd.npoints, rd_krf, v, rd_krferr
+  self->sums2meanerr, rd.kiflux, rd.kiflux2, rd.npoints, rd_kif, v, rd_kiferr
+
+  ;; subtract counts and keep track of errors
+  self->calc_adderr, dd_kgf, dd_kgferr, -rd_kgf, rd_kgferr, kgf, kgferr
+  self->calc_adderr, dd_krf, dd_krferr, -rd_krf, rd_krferr, krf, krferr
+  self->calc_adderr, dd_kif, dd_kiferr, -rd_kif, rd_kiferr, kif, kiferr  
+
+  st.kgmr = -2.5*alog10(kgf/krf)
+  st.kgmr_err = self->fluxerr2colorerr(kgf, kgferr, krf, krferr )
+  st.krmi = -2.5*alog10(krf/kif)
+  st.krmi_err = self->fluxerr2colorerr(krf, krferr, kif, kiferr )
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Densities
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+  ;; Radial 
+  ;; lum
+
+  st.radilumdens     = dd.radilum/dr.usedarea - rd.radilum/rr.usedarea
+  st.radilumdens_err = $
+    sqrt( (dd.radilum_err/dr.usedarea)^2 + (rd.radilum_err/rr.usedarea)^2 )
+
+
+  ;; number
+  ddcounts = double(dd.radcounts)/dd.npoints
+  ddcounts_err = sqrt(double(dd.radcounts))/dd.npoints
+
+  rdcounts = double(rd.radcounts)/rd.npoints
+  rdcounts_err = sqrt(double(rd.radcounts))/rd.npoints
+
+
+  st.radnumdens      = ddcounts/dr.usedarea - rdcounts/rr.usedarea
+  st.radnumdens_err  = $
+    sqrt( (ddcounts_err/dr.usedarea)^2 + (rdcounts_err/rr.usedarea)^2 )
+
+  ;; means in all bins
+  FOR i=0L, dd.nrad-1 DO BEGIN 
+
+      st.ilumdens[i,*,*] = $
+        dd.ilum[i,*,*]/dr.usedarea[i] - rd.ilum[i,*,*]/rr.usedarea[i]
+      st.ilumdens_err[i,*,*] = $
+        sqrt( (dd.ilum_err[i,*,*]/dr.usedarea[i])^2 + $
+              (rd.ilum_err[i,*,*]/rr.usedarea[i])^2 )
+
+      ddcounts = double(dd.counts[i,*,*])/dd.npoints
+      ddcounts_err = sqrt(double(dd.counts[i,*,*]))/dd.npoints
+      
+      rdcounts = double(rd.counts[i,*,*])/rd.npoints
+      rdcounts_err = sqrt(double(rd.counts[i,*,*]))/rd.npoints
+
+      st.numdens[i,*,*]  = ddcounts/dr.usedarea[i] - rdcounts/rr.usedarea[i]
+      st.numdens_err[i,*,*]  = $
+        sqrt( (ddcounts_err/dr.usedarea[i])^2 + (rdcounts_err/rr.usedarea[i])^2 )
+
+
+  ENDFOR 
+
+  return, st
+END 
+
+
+
+;; For now just dd-rd
+PRO correlate::correct, subtype=subtype, $
+             max_model_rad=max_model_rad, max_use_rad=max_use_rad
+
+  dd = self->corr_read('dd','combined',subtype=subtype)
+  dr = self->corr_read('dd','matchdr', subtype=subtype)
+  rd = self->corr_read('dd','matchrd', subtype=subtype)
+  rr = self->corr_read('dd','matchrr', subtype=subtype)  
+
+  print
+  print,'Modeling small scale UsedArea'
+  psfile = self->model_usedarea_plotfile(subtype=subtype)
+  begplot, name=psfile, /color
+  dr = self->model_usedarea(dr, 4.0, 3.0)
+  endplot
+
+  outfiles = self->corrfile('dd','corrected',subtype=subtype,/createdir)
+  
+  nbin = n_elements(dd)
+  FOR bin=0L, nbin-1 DO BEGIN 
+
+      print,'--------------------------------------------------------------------'
+
+      ddcorr = self->_correct(dd[bin], rd[bin], dr[bin], rr[bin])
+
+      print
+      print,'Writing to file: ',outfiles[bin]
+      write_idlstruct, ddcorr, outfiles[bin]
+
+  ENDFOR 
+
+
+
+END 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Jackknifing
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FUNCTION correlate::get_index, struct
+  ;; I stupidly made the index called bcg_id the first time around
+  IF tag_exist(struct, 'bcg_id') THEN BEGIN 
+      index = struct.bcg_id
+  ENDIF ELSE IF tag_exist(index) THEN BEGIN 
+      index = struct.index
+  ENDIF ELSE BEGIN 
+      message,'No index found'
+  ENDELSE 
+  return, index
+END 
+PRO correlate::jackknife, subtype=subtype
+
+  struct = self->get()  
+  cin = self->corr_read('primary','input')
+  eq2csurvey, cin.ra, cin.dec, clam, ceta
+  
+  comb = self->corr_read('dd','corrected', subtype=subtype)
+
+  IF n_elements(subtype) EQ 0 THEN BEGIN 
+
+      num = n_elements(struct)
+
+      jk = self->get_jackknife_indices(lindgen(num), clam, ceta)
+
+      njack = n_elements(jk)
+      print
+      print,'Extracting '+ntostr(njack)+' jackknife regions'
+
+      dd_file = self->corrfile('dd','output')
+
+      ;; Sum structs in each jackknife region
+      dd_sumstructs = self->sum_radlumcolor_output(dd_file, keeparray=jk)
+stop
+
+      dr_files = self->list_random('dr', count=nfiles)
+
+      starray = replicate( self->rad_sumstruct(), nfiles, njack )
+
+          
+      FOR i=0L, nfiles-1 DO BEGIN 
+
+          print,'------------------------------------------------------------'
+          dr_file = dr_files[i]
+
+          secondary_randnum = long( stregex(dr_file,'[0-9][0-9].st',/extract) )
+
+          print,'Secondary randnum = ',secondary_randnum
+          ;; combine the sub samples
+          dr_sumstructs = self->sum_rad_output(dr_file, keeparray=jk)
+
+          ;; Get the total density
+          FOR j=0L, njack-1 DO BEGIN 
+              ind = *jk[j]
+              dr_sumstructs[j].totaldensity = $
+                self->calc_totaldensity(cin[ind].z, $
+                                        secondary_randnum=secondary_randnum)
+              dr_sumstructs[j].usedarea = $
+                dr_sumstructs[j].radcounts/dr_sumstructs[j].totaldensity
+              dr_sumstructs[j].usedarea_err = $
+                sqrt(dr_sumstructs[j].radcounts)/dr_sumstructs[j].totaldensity
+          ENDFOR 
+
+          ;; Copy in jackknife regions for this random
+          starray[i,*] = dr_sumstructs
+          
+      ENDFOR 
+
+      ;; Sum over the randoms to leave just the jackknife regions
+      ;; in the second index
+      dr_sumstructs = replicate( self->rad_sumstruct(), njack)
+      FOR i=0L, njack-1 DO BEGIN 
+          dr_sumstructs[i] = self->combine_sumstructs(starray[*,i])
+      ENDFOR 
+stop
+
+      cov = self->jackknife_covariance(dd_sumstructs, dr_sumstructs, err=err)
+
+stop
+;      ;; jackknifing the overall sample
+;      comb = self->corr_read('dd','combined')
+;      outfile = self->corrfile('dd','jackknife', /createdir)
+
+      ;; will inherit the quantities from sh, such 
+      ;; as averages
+;      jackstruct = self->jackknife_sample(cin, cout, comb)
+
+;      print
+;      print,'Writing to jackknife file: ',outfile
+;      write_idlstruct, jackstruct, outfile
+
+      ptr_free, jk
+
+  ENDIF ELSE BEGIN 
+
+      dd_file = self->corrfile('dd','output')
+      dr_files = self->list_random('dr', count=nfiles)
+
+      print
+      print,'getting keep array'
+      keeparray = self->where_select(struct, subtype, nkeep=nkeep, nbin=nbin)
+
+      print
+      print,'------------------------------------------------------------'
+      print,'Getting jackknife regions for each bin'
+      FOR bin=0L, nbin-1 DO BEGIN 
+          print,'Bin = ',bin
+          ind = *keeparray[bin]
+          jk = self->get_jackknife_indices(ind, clam[ind], ceta[ind])
+
+          njack = n_elements(jk)
+
+          print
+          print,'----------------------------------------------------------'
+          print,'Extracting '+ntostr(njack)+' jackknife regions from file '+dd_file
+
+          dd_sumstructs = self->sum_radlumcolor_output(dd_file, keeparray=jk)
+stop
+          
+          starray = replicate( self->rad_sumstruct(), nfiles, njack )
+
+          FOR i=0L, nfiles-1 DO BEGIN 
+
+              print,'------------------------------------------------------------'
+              dr_file = dr_files[i]
+
+              secondary_randnum = long( stregex(dr_file,'[0-9][0-9].st',/extract) )
+
+              print,'Secondary randnum = ',secondary_randnum
+              ;; combine the sub samples
+              dr_sumstructs = self->sum_rad_output(dr_file, keeparray=jk)
+
+              ;; Get the total density
+              FOR j=0L, njack-1 DO BEGIN 
+                  ind = *jk[j]
+                  dr_sumstructs[j].totaldensity = $
+                    self->calc_totaldensity(cin[ind].z, $
+                                            secondary_randnum=secondary_randnum)
+                  dr_sumstructs[j].usedarea = $
+                    dr_sumstructs[j].radcounts/dr_sumstructs[j].totaldensity
+                  dr_sumstructs[j].usedarea_err = $
+                    sqrt(dr_sumstructs[j].radcounts)/dr_sumstructs[j].totaldensity
+              ENDFOR 
+              
+              ;; Copy in jackknife regions for this bin
+              starray[i,*] = dr_sumstructs
+          
+          ENDFOR 
+          
+          ;; Sum over the randoms to leave just the jackknife regions
+          ;; in the second index
+          dr_sumstructs = replicate( self->rad_sumstruct(), njack)
+          FOR i=0L, njack-1 DO BEGIN 
+              dr_sumstructs[i] = self->combine_sumstructs(starray[*,i])
+          ENDFOR 
+
+          ptr_free, jk
+          ;; Do jackknifing here
+
+stop
+
+          cov = self->jackknife_covariance(dd_sumstructs, dr_sumstructs, err=err)
+
+      ENDFOR 
+
+      ptr_free, keeparray
+
+  ENDELSE 
+
+END 
+
+;; Return the indices of objects in each jackknife region
+FUNCTION correlate::get_jackknife_indices, inputid, clambda, ceta, $
+                  jackknife_file=jackknife_file
+
+  jackknife_ids = csurvey2jack(clambda, ceta, file=jackknife_file)
+
+  minjack = min(jackknife_ids, max=maxjack)
+  IF minjack LT 0 THEN message,'Some not found in a jackknife region'
+
+  h = histogram(jackknife_ids-minjack, min=0, rev=rev)
+
+  ;; How many unique jackknife regions do we have?
+  wh = where(h NE 0, Nsub)
+
+  jack_keeparray = ptrarr(Nsub)
+  ;; Now aggregate the indices by jackknife region
+  FOR sub=0L, Nsub-1 DO BEGIN 
+
+      iSub = wh[sub]
+      wSub = rev[ rev[iSub]:rev[iSub+1]-1 ]
+      ind = inputid[ wSub ]
+
+      jack_keeparray[sub] = ptr_new(ind, /no_copy)
+  ENDFOR 
+
+  return, jack_keeparray
+END 
+
+;; Return the indices of objects in each jackknife region
+PRO correlate::get_jackknife_indices_old, inputid, clambda, ceta, bin, jack_keeparray, binarray, $
+                  jackknife_file=jackknife_file
+
+  jackknife_ids = csurvey2jack(clambda, ceta, file=jackknife_file)
+
+  minjack = min(jackknife_ids, max=maxjack)
+  IF minjack LT 0 THEN message,'Some not found in a jackknife region'
+
+  h = histogram(jackknife_ids-minjack, min=0, rev=rev)
+
+  ;; How many unique jackknife regions do we have?
+  wh = where(h NE 0, Nsub)
+
+  ;; Now aggregate the indices by jackknife region
+  FOR sub=0L, Nsub-1 DO BEGIN 
+
+      iSub = wh[sub]
+      wSub = rev[ rev[iSub]:rev[iSub+1]-1 ]
+      ind = inputid[ wSub ]
+
+      add_arrval, ptr_new(ind, /no_copy), jack_keeparray
+      add_arrval, bin, binarray
+  ENDFOR 
+
+END 
+
+
+FUNCTION correlate::jackknife_covariance, dd, dr, rd, rr, err=err, luminosity=luminosity
+
+  IF n_params() LT 2 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: covariance=c->jackknife_covariance(dd, dr, err=, /luminosity)'
+      print
+      message,'Halting'
+  ENDIF 
+
+  tt=systime(1)
+
+  Nmeas = n_elements(dd)
+  Nrad = n_elements(dd[0].radcounts)
+  
+  print,'Nmeas = ',Nmeas
+  print,'Nrad = ',Nrad
+
+  print,'Getting copy of data'
+  IF keyword_set(luminosity) THEN BEGIN 
+      ;; mean luminosity in each jackknife region
+      dd_data = dd.radilum*dd.npoints
+
+;      randsubtract = rd.radilum/rr.usedarea
+  ENDIF ELSE BEGIN 
+      ;; Mean counts
+      dd_data = double(dd.radcounts)
+
+;      randsubtract = double(rd.radcounts)/rd.npoints/rr.usedarea
+  ENDELSE 
+
+  print,'Creating outputs'
+  ;; Outputs: mean, covariance and diagonal terms
+  err = dblarr(Nrad)
+  covariance = dblarr(Nrad, Nrad)
+
+  sampval = dblarr(Nrad,Nmeas)
+  jval = dblarr(Nrad)
+  stot = 0d
+  smod = 0d
+
+  ;; measure totals. Just subtract off appropriate thing
+  ;; to get means in subsamples
+
+  ;; These are scalars
+  print,'Getting scalar totals'
+  totdensity = total( dr.totaldensity, /double)
+  npoints = total_int( dd.npoints )
+
+  print,'Looping over radial bins'
+  FOR iRad=0L, Nrad-1 DO BEGIN
+
+      ;; Total the counts/luminosity for this radial bin over jackknife
+      ;; samples
+      dd_counts = total( dd_data[iRad,*], /double )
+      dr_counts = total( dr.radcounts[iRad], /double )
+
+      ;; Now means with one jackknife region subtracted
+      FOR j=0L, Nmeas-1 DO BEGIN 
+
+          ;; Counts in sample, per central point
+          npointsMod = npoints - dd[j].npoints
+          dd_countsMod = dd_counts - dd_data[iRad, j]
+          dd_countsMod = dd_countsMod/npointsMod
+
+          ;; Not normalized by npoints
+          dr_countsMod = dr_counts - dr[j].radcounts[iRad]
+          totdensityMod = totdensity - dr[j].totaldensity
+          usedAreaMod = dr_countsMod/totdensityMod
+
+          sampval[iRad,j] = dd_countsMod/usedAreaMod
+
+      ENDFOR 
+
+      w=where( sampval[iRad,*] EQ 0, nw)
+      IF nw NE 0 THEN print,'.',format='(a,$)'
+
+      jval[iRad] = mean_check(sampval[iRad,*], /double)
+
+usedArea = dr_counts/totdensity
+print,dd_counts/npoints/usedArea,jval[iRad]
+  ENDFOR 
+
+  ;; Now jackknife covariance between variables
+  FOR jRad=0L, Nrad-1 DO BEGIN 
+      FOR iRad=jRad, Nrad-1 DO BEGIN 
+
+          tmp = $
+            total( (sampval[iRad,*]-jval[iRad])*(sampval[jRad,*]-jval[jRad]), $
+                   /double)
+          covariance[jRad, iRad] = tmp*(Nmeas - 1.)/Nmeas
+
+          IF jRad NE iRad THEN covariance[iRad, jRad] = covariance[jRad, iRad]
+          IF jRad EQ iRad THEN err[iRad] = sqrt( covariance[iRad, iRad] )
+
+      ENDFOR 
+  ENDFOR 
+
+  return, covariance
+
+END 
+
+
+
+FUNCTION correlate::create_jackknife_samples, cin, cout, $
+  jackknife_ids=jackknife_ids, $
+  jackknife_file=jackknife_file, $
+  wuse=wuse
+
+  IF n_params() LT 2 THEN BEGIN 
+      print,'-Syntax: jackstruct = c->create_jackknife_samples(cin, cout, jackknife_ids=, jackknife_file=, wuse=)'
+      return, -1
+  ENDIF 
+
+  
+  nLenses = n_elements(cout)
+  IF n_elements(cin) NE nlenses THEN $
+    message,'cin and cout must be same size'
+
+  IF n_elements(jackknife_ids) EQ 0 THEN BEGIN 
+      jackknife_ids = csurvey2jack(cin.clambda, cin.ceta, $
+                                   file=jackknife_file)
+  ENDIF 
+
+  simpctable, colorlist=colorlist
+  nc = n_elements(colorlist)
+;  rmd = rem_dup(pixnums)
+;  display_pixel, pixnums[rmd], /iso, resolution=256
+
+  minjack = min(jackknife_ids, max=maxjack)
+  IF minjack LT 0 THEN message,'Some not found in a jackknife region'
+
+  h = histogram(jackknife_ids-minjack, min=0, rev=rev)
+
+  ;; How many unique jackknife regions do we have?
+  wh = where(h NE 0, Nsub)
+
+
+  IF n_elements(wuse) NE 0 THEN BEGIN 
+      Nbin = n_elements(wuse)
+  ENDIF ELSE BEGIN 
+      Nbin = n_elements(cout[0].rsum)
+      wuse = lindgen(nbin)
+  ENDELSE  
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Define the arrays we will use
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  sigsum_tot = dblarr(Nbin)
+  wsum_tot   = dblarr(Nbin)
+
+  sigsum_sub = dblarr(Nsub, Nbin)
+  wsum_sub   = dblarr(Nsub, Nbin)
+
+
+  osigsum_tot = dblarr(Nbin)
+  owsum_tot   = dblarr(Nbin)
+
+  osigsum_sub = dblarr(Nsub, Nbin)
+  owsum_sub   = dblarr(Nsub, Nbin)
+
+
+  jackKnifeID = lonarr(Nsub)
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;
+  ;; Create the jackknife sub-samples
+  ;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  nLensesUsed = 0L
+
+  FOR sub=0L, Nsub-1 DO BEGIN 
+
+      isub = wh[sub]
+
+      IF rev[isub] EQ rev[isub+1] THEN message,'error in histogramming?'
+
+      wsub = rev[ rev[isub]:rev[isub+1] -1 ]
+      nwsub = n_elements(wsub)
+
+      ;; plot the pixels.  This takes longer than the jackknifing
+;      rmd = rem_dup(pixnums[wsub])
+;      display_pixel, pixnums[wsub[rmd]], $
+;        color=colorlist[ sub MOD nc ], /over_plot, resolution=256
+
+      nLensesUsed = nLensesUsed + nwsub
+
+      jackknifeid[sub] = jackknife_ids[wsub[0]]
+
+      FOR bin=0L, Nbin-1 DO BEGIN 
+
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          ;; Generate sums for this sub-region and bin
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+          weights = cout[wsub].wsum[wuse[bin]]
+          oweights = cout[wsub].owsum[wuse[bin]]
+
+          sigsum_sub[sub, bin] = $
+            total( cout[wsub].sigma[wuse[bin]]*weights, /double)
+          wsum_sub[sub, bin] = total(weights)
+          
+          osigsum_sub[sub, bin] = $
+            total( cout[wsub].orthosig[wuse[bin]]*oweights, /double)
+          owsum_sub[sub, bin] = total(weights)
+
+
+
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          ;; Add these to the totals
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+          sigsum_tot[bin] = sigsum_tot[bin] + sigsum_sub[sub, bin]
+          wsum_tot[bin] = wsum_tot[bin] + wsum_sub[sub, bin]
+
+          osigsum_tot[bin] = osigsum_tot[bin] + osigsum_sub[sub, bin]
+          owsum_tot[bin] = owsum_tot[bin] + owsum_sub[sub, bin]
+          
+      ENDFOR ;; Loop over bins
+
+  ENDFOR 
+
+  print,'Used '+ntostr(nLensesUsed)+'/'+ntostr(nLenses)
+
+  jackStruct = create_struct('nLenses',     nLenses, $
+                             'nLensesUsed', nLensesUsed, $
+                             $
+                             'Nsub',        Nsub, $
+                             'jackKnifeID', jackKnifeID, $
+                             $
+                             'sigsum_tot',  sigsum_tot, $
+                             'wsum_tot',    wsum_tot, $
+                             'sigsum_sub',  sigsum_sub, $
+                             'wsum_sub',    wsum_sub, $
+                             $
+                             'osigsum_tot',  osigsum_tot, $
+                             'owsum_tot',    owsum_tot, $
+                             'osigsum_sub',  osigsum_sub, $
+                             'owsum_sub',    owsum_sub)
+
+  return,jackStruct
+
+END 
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Invert to 3D profile
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FUNCTION correlate::_invert_integrate, r, density, rmax
+
+  ;; Cumulative integral: repeat for various rmax
+  npoints = 100
+
+  nrad = n_elements(rmax)
+  
+  integral = dblarr(nrad)
+
+  rmin = min(r)
+  FOR i=0L, nrad-1 DO BEGIN 
+
+      w = where(r LE rmax[i], nw)
+
+      IF nw EQ 0 THEN BEGIN 
+          message,'rmax value outside range of input r'
+      ENDIF 
+
+
+      gauleg, rmin, rmax[i], npoints, RR, WW
+
+      iDensity = interpol(density, r, RR)
+      integrand = 4d*!dpi*iDensity*RR^2
+
+      integral[i] = total( integrand*WW )
+
+  ENDFOR 
+  
+  return, integral
+  
+
+END 
+PRO correlate::invert, subtype=subtype, corrected=corrected
+
+  ;; This will be jackknife when we get that done
+  IF keyword_set(corrected) THEN BEGIN 
+      t = self->corr_read('dd','corrected', subtype=subtype)
+  ENDIF ELSE BEGIN 
+      t = self->corr_read('dd','jackknife', subtype=subtype)
+  ENDELSE 
+
+  nbin = n_elements(t)
+  nrad = n_elements(t[0].r)
+
+  rmin = t[0].radbins_min[0:nrad-2]
+  rmax = t[0].radbins_max[0:nrad-2]
+  area = !dpi*(rmax^2 - rmin^2)
+  volume = (4d/3d)*!dpi*(rmax^3 - rmin^3)
+
+  FOR i=0L, nbin-1 DO BEGIN 
+
+      r = t[i].r
+      ldens = t[i].radilumdens
+      IF keyword_set(corrected) THEN BEGIN 
+          lcov = diagonal_array(t[i].radilumdens_err)
+      ENDIF ELSE BEGIN 
+          lcov = t[i].radilumdens_cov
+      ENDELSE 
+
+      ds2drho, r, ldens, dLumDens, dLumDensCov, dLumDensErr, endc, dscov=lcov, /corr2d
+
+      key = prompt_kbrd('hit a key to see L(r)')
+      IF key EQ 'q' THEN return
+
+      ;; A couple of different ways to integrate
+      ;; 1: just total it up times the area of the bin.  I.e. assume constant
+      ;;    within the bin.
+      ;; 2: integrate the function.
+
+      LumInBins = dLumDens*volume
+      LumInBinsErr = dLumDensErr*volume
+
+      tLum = total( LumInBins, /cumulative )
+      tLumErr = sqrt( 1d/total(1d/LumInBinsErr^2, /cumulative) )
+
+      iRad = r[1:nrad-2]
+      Lum = self->_invert_integrate(r[0:nrad-2], dLumDens, iRad)
+
+;      !p.multi = 0
+;      yrange = prange(tLum, tLumErr, slack=2d)
+;      yrange[0] = yrange[0] > 1.e-2
+ ;     pplot, r[0:nrad-2], tLum, yerr=tLumErr,psym=8, $
+ ;       /xlog, /ylog, yrange=yrange, ystyle=3, $
+ ;       xtickf='loglabels', ytickf='loglabels'
+ ;     pplot, iRad, Lum, /overplot, color=!green, /aspect
+
+;      key = prompt_kbrd('hit a key')
+;      IF key EQ 'q' THEN return
+
+  ENDFOR 
+
+END  
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Some plotting routines.  Need to be generalized
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FUNCTION correlate::mplot_value, nbin
+
+  CASE nbin OF
+      1: message,"nbin=1 doesn't make sense FOR multiplot"
+      2: mplot_value=[1,2]
+      3: mplot_value=[3,1]
+      6: mplot_value=[3,2]
+      8: mplot_value=[4,2]
+      9: mplot_value=[3,3]
+      12: mplot_value=[4,3]
+      16: mplot_value=[4,4]
+      ELSE: message,'unknown nbin: '+ntostr(nbin)
+  ENDCASE 
+  return,mplot_value
+
+END 
+
+PRO correlate::plot_usedarea, dtype, subtype=subtype, bin=bin
+
+  IF n_elements(dtype) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: co->plot_usedarea, dtype, subtype=, bin='
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF dtype NE 'matchdr' AND dtype NE 'matchrr' THEN BEGIN 
+      message,'dtype must be matchdr or matchrr'
+  ENDIF 
+
+  IF n_elements(subtype) NE 0 AND n_elements(bin) EQ 0 THEN BEGIN 
+      message,'for subtypes, send a bin number'
+  ENDIF 
+
+
+  stsum = self->corr_read('dd',dtype,subtype=subtype,bin=bin)
+
+  simpctable, color=color
+  
+  ratio = st.usedarea/st.area
+  r = st.r
+  w=where(r GT 0 AND ratio GT 0)
+  yrange = [min(ratio[w]) > 0.8, max(ratio[w]) < 1.2]
+  xrange = [0.5*min(r[w]), max(r[w])*1.5]
+
+;  yrange=[0.8,1.2]
+
+  pplot, stsum.r, stsum.usedarea/stsum.area, $
+    yerr=stsum.usedarea_err/stsum.area, $
+    /xlog,/ynozero,yrange=yrange,thick=2,xrange=xrange, xstyle=3,ystyle=3, $
+    xtitle=!mpcxtitle2, ytitle='Used Area/Area', $
+    xtickf='loglabels'
+
+  oplot, [1.e-5, 1.e5], [1,1]
+  FOR i=0L,nst-1 DO BEGIN 
+      pplot, st[i].r, st[i].usedarea/st[i].area, color=color[i+1],/overplot
+  ENDFOR 
+
+  pplot, stsum.r, stsum.usedarea/stsum.area, $
+    yerr=stsum.usedarea_err/stsum.area,thick=3, /overplot
+
+END 
+
+
+PRO correlate::plot_usedarea_multi, dtype, subtype
+
+  IF n_elements(dtype) EQ 0 OR n_elements(subtype) EQ 0 THEN BEGIN 
+      on_error, 2
+      print,'-Syntax: co->plot_usedarea, dtype, subtype, bin='
+      print
+      message,'Halting'
+  ENDIF 
+
+  IF dtype NE 'matchdr' AND dtype NE 'matchrr' THEN BEGIN 
+      message,'dtype must be matchdr or matchrr'
+  ENDIF 
+
+  nbin = self->subtype_nbin(subtype)
+
+  mpv = self->mplot_value(nbin)
+
+  ws=self->where_string(subtype, labels=labels)
+
+  st = self->corr_read('dd',dtype,subtype=subtype,bin=bin)
+
+  !p.multi = [0,mpv] & !p.charsize=2
+  simpctable, color=color
+  FOR bin=0L, nbin-1 DO BEGIN 
+
+      IF bin EQ 0 THEN BEGIN 
+          ratio = st.usedarea/st.area
+          r = st.r
+          w=where(r GT 0 AND ratio GT 0)
+          ;;yrange = [min(ratio[w]) > 0.8, max(ratio[w]) < 1.2]
+          xrange = [0.5*min(r[w]), max(r[w])*1.5]
+          yrange=[0.9,1.05]
+      ENDIF 
+      
+      sti = st[bin]
+
+      mplot, sti.r, sti.usedarea/sti.area, $
+        /xlog,/ynozero,yrange=yrange,thick=2,xrange=xrange, xstyle=1,ystyle=1, $
+        mxtitle=!mpcxtitle2, mytitle='Used Area/Area', $
+        xtickf='loglabels', xticklen=0.04
+      oploterror, sti.r, sti.usedarea/sti.area, sti.usedarea_err/sti.area
+
+      oplot, [1.e-5, 1.e5], [1,1]
+      legend, labels[bin],/right,box=0, charsize=1
+
+  ENDFOR 
+
+  !p.multi=0 & !p.charsize=1
+
+END 
+
+
+
+PRO correlate::plot_profile_over, subtype, tag, reverse_labels=reverse_labels, dops=dops, dopng=dopng
+
+  ;; !!! NEED TO UPDATE DIRECTORY NAMEING SCHEME AND THIS TOO
+  par = self->par_struct()
+  dir = self->plotdir(subtype=subtype)
+  plotfile = par.DPsample+'_'+par.DSsample+'_'+subtype+'_'+tag
+  plotfile = concat_dir(dir, plotfile)
+  IF keyword_set(dops) THEN BEGIN 
+      plotfile = plotfile+'.eps'
+      begplot, plotfile, /encap, /color
+  ENDIF ELSE IF keyword_set(dopng) THEN BEGIN 
+      plotfile = plotfile+'.png'
+  ENDIF 
+
+
+  ddc=self->corr_read('dd','corrected',subtype=subtype)
+  nbin = n_elements(ddc)
+
+  IF NOT tag_exist(ddc,tag,index=ti) THEN message,'No such tag: '+ntostr(tag)
+  IF NOT tag_exist(ddc,tag+'_err',index=tei) THEN message,'No such error tag: '+ntostr(tag+'_err')
+
+  xlog=1
+  ylog=1
+  IF tag EQ 'kgmr' AND tag EQ 'krmi' THEN ylog=0
+
+  r = ddc.r
+  t = ddc.(ti)
+  w=where( r GT 0 AND t GT 0 )
+  xrange = [0.5*min(r[w]), 1.5*max(r[w])]
+  yrange = [0.5*min(t[w]), 1.5*max(t[w])]
+
+  simpctable, color=color
+  nc = n_elements(color)
+
+  pplot, ddc[0].r, ddc[0].(ti), yerr=ddc[0].(tei), $
+    /xlog, /ylog, $
+    xrange=xrange, xstyle=3, yrange=yrange, ystyle=3, $
+    xtitle=!mpcxtitle2, ytitle=tag, aspect=1
+
+  add_arrval, color[0], lcolors
+  FOR i=1L, nbin-1 DO BEGIN 
+      lcolor = color[i MOD nc]
+      pplot, ddc[i].r, ddc[i].(ti), yerr=ddc[i].(tei), /overplot, $
+        color=lcolor
+
+      add_arrval, lcolor, lcolors
+  ENDFOR 
+
+  ws = self->where_string(subtype, labels=labels)
+
+  IF keyword_set(reverse_labels) THEN BEGIN 
+      labels=reverse(labels)
+      lcolors=reverse(lcolors)
+  ENDIF 
+  legend, labels, /right, box=0, charsize=1, lin=0, color=lcolors
+
+
+  IF keyword_set(dops) THEN BEGIN 
+      endplot, /trim_bbox
+  ENDIF ELSE IF keyword_set(dopng) THEN BEGIN 
+      write_png, plotfile, tvrd(/true)
+  ENDIF 
+
+
+END 
+
+
+
+PRO correlate::plot_lumcolor_vs_rad, ddcorr
+
+ !p.multi = [0,5,4] 
+ !p.charsize=2
+
+ xmold = !x.margin
+ ymold = !y.margin
+
+ !x.margin = [10,1.5]
+ !y.margin = [0,1.5]
+
+ xrange = [min(ddcorr.loglbins_min), max(ddcorr.loglbins_max)]
+ yrange = [min(ddcorr.kgmrbins_min), max(ddcorr.kgmrbins_max)]
+
+ xtitle = 'log(L/L'+sunsymbol()+')'
+ ytitle = 'g-r'
+
+ FOR i=0,ddcorr[0].nrad-1 DO BEGIN 
+
+     tvim2, reform(ddcorr.numdens[i,*,*]), xrange=xrange,yrange=yrange, $
+       xtitle=xtitle, ytitle=ytitle, $
+       title = 'r = '+ntostr(ddcorr.r[i],4,/round)+' h!U-1!NMpc'
+
+ ENDFOR 
+
+ !x.margin = xmold
+ !y.margin = ymold
+
+ !p.multi=0
+ !p.charsize=1
+
+END 
+
+
+PRO correlate::plot_lum_vs_rad, ddcorr
+
+ !p.multi = [0,5,4] 
+ !p.charsize=2
+
+;  erase & multiplot, [5,4]
+  
+  yrange=[1.e-4,100]
+  
+  xtitle = 'log(L/L'+sunsymbol()+')'
+  
+  loglvals = (ddcorr.loglbins_min+ddcorr.loglbins_max)/2.0
+  xrange = [0.99*min(ddcorr.loglbins_min), max(ddcorr.loglbins_max)*1.01]
+;  xrange = [min(loglvals),max(loglvals)]
+
+ 
+  FOR i=0,ddcorr.nrad-1 DO BEGIN 
+      
+      numdens = reform( ddcorr.numdens[i,*,*] )
+      numdens_err = reform( ddcorr.numdens_err[i,*,*])
+      
+      ldens = total(numdens, 2, /double)
+      ldens_err= sqrt( total(numdens_err^2, 2, /double) )
+      
+;     yrange = [ 1.e-4, 1.5*max(ldens) ]
+      
+      mplot, loglvals, ldens, $
+        /ylog, psym=10, mxtitle=xtitle, mytitle='h!U2!N Mpc!U-2!N', $
+        yrange = yrange, ystyle=3, $
+        xrange=xrange, xstyle=3, $
+        ytickf='loglabels', yticklen=0.04
+      
+      oploterror, loglvals, ldens, ldens_err, hat=0, psym=10
+      
+      legend, 'r = '+ntostr(ddcorr.r[i],4,/round)+' h!U-1!NMpc', $
+        /right, box=0, charsize=1
+
+
+;      IF i NE ddcorr.nrad-1 THEN multiplot
+      
+  ENDFOR 
+
+;  multiplot, /reset
+
+  !p.multi=0
+  !p.charsize=1
+
+END 
+
+
+PRO correlate::plot_kgmr_vs_rad, ddcorr
+
+ !p.multi = [0,5,4] 
+ !p.charsize=2
+
+
+ xmold = !x.margin
+ ymold = !y.margin
+
+ !x.margin = [5,1.5]
+ !y.margin = [3,1.5]
+
+
+;  erase & multiplot, [5,4]
+  
+;  yrange=[1.e-4,100]
+  
+  xtitle = 'g-r'
+  
+  cvals = (ddcorr.kgmrbins_min+ddcorr.kgmrbins_max)/2.0
+  xrange = [0.99*min(ddcorr.kgmrbins_min), max(ddcorr.kgmrbins_max)*1.01]
+;  xrange = [min(loglvals),max(loglvals)]
+
+  FOR i=0,ddcorr.nrad-1 DO BEGIN 
+      
+      numdens = reform( ddcorr.numdens[i,*,*] )
+      numdens_err = reform( ddcorr.numdens_err[i,*,*])
+      
+      cdens = total(numdens, 1, /double)
+      cdens_err= sqrt( total(numdens_err^2, 1, /double) )
+      
+;     yrange = [ 1.e-4, 1.5*max(ldens) ]
+      
+;      mplot, cvals, cdens, $
+;        psym=10, mxtitle=xtitle, mytitle='Mpc!U-2!N', $
+;        yrange = yrange, ystyle=3, $
+;        xrange=xrange, xstyle=3      
+;      oploterror, cvals, cdens, cdens_err, hat=0, psym=10
+
+      pplot, cvals, cdens, yerr=cdens_err, hat=0, $
+        psym=10, xtitle=xtitle, ytitle='h!U2!N Mpc!U-2!N', $
+        yrange = yrange, ystyle=3, $
+        xrange=xrange, xstyle=3, aspect=1, $
+        title = 'r = '+ntostr(ddcorr.r[i],4,/round)+' h!U-1!NMpc'
+
+
+;      IF i NE ddcorr.nrad-1 THEN multiplot
+      
+  ENDFOR 
+
+;  multiplot, /reset
+
+  !p.multi=0
+  !p.charsize=1
+
+  !x.margin = xmold
+  !y.margin = ymold
+
+END 
+
+
+
+
+
+PRO correlate__define
+  struct = {$
+             correlate, $
+             par_struct: ptr_new() $
+           }
+END 

@@ -1,0 +1,9 @@
+Run programs in this order:
+
+make_spec_index
+collate_spec_index
+make_stripe_index (make sure up-to-date steves_runlist.par)
+run_combine_stripe_index
+
+Then to find which are missing imaging runs
+missing_spectro_runs

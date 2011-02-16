@@ -1,0 +1,902 @@
+IDL Version 5.2 (OSF alpha). Research Systems, Inc.
+Installation number: 94432-36.
+Licensed for use by: Campus License
+
+For basic information, enter "IDLInfo" at the IDL> prompt.
+
+start up ...
+% Compiled module: ASTROLIB.
+% ASTROLIB: Astronomy Library system variables have been added
+% Compiled module: RUNREG.
+% Compiled module: NTOSTR.
+% Compiled module: MRDFITS.
+% Compiled module: FXPOSIT.
+% Compiled module: MRD_HREAD.
+% Compiled module: FXPAR.
+% Compiled module: GETTOK.
+% Compiled module: VALID_NUM.
+% Compiled module: MRD_SKIP.
+% Compiled module: MRD_STRUCT.
+MRDFITS: Binary table.  8 columns by  27993 rows.
+% Compiled module: IS_IEEE_BIG.
+% Compiled module: IEEE_TO_HOST.
+MRDFITS: Binary table.  6 columns by  1166347 rows.
+% Compiled module: REGRESSGAL.
+
+Using 16 bins between 10.0000 and 600.000 arcseconds
+% Compiled module: EXIST.
+
+Matrix file: /sdss4/data1/esheldon/REGRESS/matrix_752_756_g_N1.txt
+e vector file: /sdss4/data1/esheldon/REGRESS/evec_752_756_g_N1.txt
+rSum file: /sdss4/data1/esheldon/REGRESS/rsum_752_756_g_N1.txt
+
+FIRSTRA: 145.29929
+LASTRA: 236.11653
+
+LASTRA =        236.11653
+FIRSTRA =        145.29929
+Finally FLAG =        0
+Using 1027856/1166347 sources
+
+         419
+Source Group = 1/73
+................
+         468
+Source Group = 2/73
+................
+         690
+Source Group = 3/73
+................
+         686
+Source Group = 4/73
+................
+         698
+Source Group = 5/73
+................
+         636
+Source Group = 6/73
+................
+         621
+Source Group = 7/73
+................
+         513
+Source Group = 8/73
+................
+         440
+Source Group = 9/73
+................
+         472
+Source Group = 10/73
+................
+         602
+Source Group = 11/73
+................
+         533
+Source Group = 12/73
+................
+         508
+Source Group = 13/73
+................
+         379
+Source Group = 14/73
+................
+         369
+Source Group = 15/73
+................
+         446
+Source Group = 16/73
+................
+         493
+Source Group = 17/73
+................
+         547
+Source Group = 18/73
+................
+         648
+Source Group = 19/73
+................
+         576
+Source Group = 20/73
+................
+         508
+Source Group = 21/73
+................
+         426
+Source Group = 22/73
+................
+         375
+Source Group = 23/73
+................
+         430
+Source Group = 24/73
+................
+         469
+Source Group = 25/73
+................
+         623
+Source Group = 26/73
+................
+         670
+Source Group = 27/73
+................
+         492
+Source Group = 28/73
+................
+         427
+Source Group = 29/73
+................
+         490
+Source Group = 30/73
+................
+         489
+Source Group = 31/73
+................
+         370
+Source Group = 32/73
+................
+         428
+Source Group = 33/73
+................
+         425
+Source Group = 34/73
+................
+         458
+Source Group = 35/73
+................
+         663
+Source Group = 36/73
+................
+         530
+Source Group = 37/73
+................
+         354
+Source Group = 38/73
+................
+         377
+Source Group = 39/73
+................
+         418
+Source Group = 40/73
+................
+         557
+Source Group = 41/73
+................
+         524
+Source Group = 42/73
+................
+         606
+Source Group = 43/73
+................
+         664
+Source Group = 44/73
+................
+         551
+Source Group = 45/73
+................
+         390
+Source Group = 46/73
+................
+         336
+Source Group = 47/73
+................
+         402
+Source Group = 48/73
+................
+         364
+Source Group = 49/73
+................
+         314
+Source Group = 50/73
+................
+         414
+Source Group = 51/73
+................
+         324
+Source Group = 52/73
+................
+         357
+Source Group = 53/73
+................
+         518
+Source Group = 54/73
+................
+         677
+Source Group = 55/73
+................
+         527
+Source Group = 56/73
+................
+         495
+Source Group = 57/73
+................
+         488
+Source Group = 58/73
+................
+         527
+Source Group = 59/73
+................
+         465
+Source Group = 60/73
+................
+         373
+Source Group = 61/73
+................
+         324
+Source Group = 62/73
+................
+         336
+Source Group = 63/73
+................
+         372
+Source Group = 64/73
+................
+         319
+Source Group = 65/73
+................
+         431
+Source Group = 66/73
+................
+         561
+Source Group = 67/73
+................
+         667
+Source Group = 68/73
+................
+         635
+Source Group = 69/73
+................
+         508
+Source Group = 70/73
+................
+         670
+Source Group = 71/73
+................
+         467
+Source Group = 72/73
+................
+         328
+Source Group = 73/73
+...............
+% Compiled module: REMOVE.
+
+Finally used 1164705/1166347 Sources
+% Compiled module: FORPRINT.
+% Compiled module: DATATYPE.
+% Compiled module: TEXTOPEN.
+% Compiled module: TEXTCLOSE.
+% Compiled module: PTIME.
+Time: 37 min 6.13 sec
+IDL Version 5.2 (OSF alpha). Research Systems, Inc.
+Installation number: 94432-36.
+Licensed for use by: Campus License
+
+For basic information, enter "IDLInfo" at the IDL> prompt.
+
+start up ...
+% Compiled module: ASTROLIB.
+% ASTROLIB: Astronomy Library system variables have been added
+% Compiled module: RUNREG.
+% Compiled module: NTOSTR.
+% Compiled module: MRDFITS.
+% Compiled module: FXPOSIT.
+% Compiled module: MRD_HREAD.
+% Compiled module: FXPAR.
+% Compiled module: GETTOK.
+% Compiled module: VALID_NUM.
+% Compiled module: MRD_SKIP.
+% Compiled module: MRD_STRUCT.
+MRDFITS: Binary table.  8 columns by  28887 rows.
+% Compiled module: IS_IEEE_BIG.
+% Compiled module: IEEE_TO_HOST.
+MRDFITS: Binary table.  6 columns by  1481372 rows.
+% Compiled module: REGRESSGAL.
+
+Using 16 bins between 10.0000 and 600.000 arcseconds
+% Compiled module: EXIST.
+
+Matrix file: /sdss4/data1/esheldon/REGRESS/matrix_752_756_r_N1.txt
+e vector file: /sdss4/data1/esheldon/REGRESS/evec_752_756_r_N1.txt
+rSum file: /sdss4/data1/esheldon/REGRESS/rsum_752_756_r_N1.txt
+
+
+LASTRA =        236.11653
+FIRSTRA =        145.29928
+Finally FLAG =        0
+Using 1303543/1481372 sources
+
+         320
+Source Group = 1/93
+................
+         350
+Source Group = 2/93
+................
+         417
+Source Group = 3/93
+................
+         602
+Source Group = 4/93
+................
+         571
+Source Group = 5/93
+................
+         570
+Source Group = 6/93
+................
+         539
+Source Group = 7/93
+................
+         569
+Source Group = 8/93
+................
+         502
+Source Group = 9/93
+................
+         410
+Source Group = 10/93
+................
+         369
+Source Group = 11/93
+................
+         352
+Source Group = 12/93
+................
+         441
+Source Group = 13/93
+................
+         508
+Source Group = 14/93
+................
+         462
+Source Group = 15/93
+................
+         429
+Source Group = 16/93
+................
+         380
+Source Group = 17/93
+................
+         314
+Source Group = 18/93
+................
+         320
+Source Group = 19/93
+................
+         385
+Source Group = 20/93
+................
+         401
+Source Group = 21/93
+................
+         473
+Source Group = 22/93
+................
+         472
+Source Group = 23/93
+................
+         511
+Source Group = 24/93
+................
+         564
+Source Group = 25/93
+................
+         385
+Source Group = 26/93
+................
+         416
+Source Group = 27/93
+................
+         339
+Source Group = 28/93
+................
+         326
+Source Group = 29/93
+................
+         308
+Source Group = 30/93
+................
+         386
+Source Group = 31/93
+................
+         378
+Source Group = 32/93
+................
+         485
+Source Group = 33/93
+................
+         594
+Source Group = 34/93
+................
+         496
+Source Group = 35/93
+................
+         397
+Source Group = 36/93
+................
+         339
+Source Group = 37/93
+................
+         394
+Source Group = 38/93
+................
+         442
+Source Group = 39/93
+................
+         364
+Source Group = 40/93
+................
+         282
+Source Group = 41/93
+................
+         359
+Source Group = 42/93
+................
+         346
+Source Group = 43/93
+................
+         352
+Source Group = 44/93
+................
+         378
+Source Group = 45/93
+................
+         554
+Source Group = 46/93
+................
+         511
+Source Group = 47/93
+................
+         373
+Source Group = 48/93
+................
+         286
+Source Group = 49/93
+................
+         303
+Source Group = 50/93
+................
+         339
+Source Group = 51/93
+................
+         363
+Source Group = 52/93
+................
+         500
+Source Group = 53/93
+................
+         434
+Source Group = 54/93
+................
+         504
+Source Group = 55/93
+................
+         581
+Source Group = 56/93
+................
+         610
+Source Group = 57/93
+................
+         455
+Source Group = 58/93
+................
+         337
+Source Group = 59/93
+................
+         290
+Source Group = 60/93
+................
+         383
+Source Group = 61/93
+................
+         401
+Source Group = 62/93
+................
+         356
+Source Group = 63/93
+................
+         282
+Source Group = 64/93
+................
+         380
+Source Group = 65/93
+................
+         333
+Source Group = 66/93
+................
+         285
+Source Group = 67/93
+................
+         339
+Source Group = 68/93
+................
+         479
+Source Group = 69/93
+................
+         598
+Source Group = 70/93
+................
+         489
+Source Group = 71/93
+................
+         431
+Source Group = 72/93
+................
+         421
+Source Group = 73/93
+................
+         473
+Source Group = 74/93
+................
+         464
+Source Group = 75/93
+................
+         454
+Source Group = 76/93
+................
+         425
+Source Group = 77/93
+................
+         351
+Source Group = 78/93
+................
+         328
+Source Group = 79/93
+................
+         350
+Source Group = 80/93
+................
+         329
+Source Group = 81/93
+................
+         301
+Source Group = 82/93
+................
+         294
+Source Group = 83/93
+................
+         441
+Source Group = 84/93
+................
+         522
+Source Group = 85/93
+................
+         502
+Source Group = 86/93
+................
+         565
+Source Group = 87/93
+................
+         401
+Source Group = 88/93
+................
+         427
+Source Group = 89/93
+................
+         539
+Source Group = 90/93
+................
+         443
+Source Group = 91/93
+................
+         345
+Source Group = 92/93
+................
+         162
+Source Group = 93/93
+..........
+% Compiled module: REMOVE.
+
+Finally used 1479492/1481372 Sources
+% Compiled module: FORPRINT.
+% Compiled module: DATATYPE.
+% Compiled module: TEXTOPEN.
+% Compiled module: TEXTCLOSE.
+% Compiled module: PTIME.
+Time: 49 min 11.7 sec
+IDL Version 5.2 (OSF alpha). Research Systems, Inc.
+Installation number: 94432-36.
+Licensed for use by: Campus License
+
+For basic information, enter "IDLInfo" at the IDL> prompt.
+
+start up ...
+% Compiled module: ASTROLIB.
+% ASTROLIB: Astronomy Library system variables have been added
+% Compiled module: RUNREG.
+% Compiled module: NTOSTR.
+% Compiled module: MRDFITS.
+% Compiled module: FXPOSIT.
+% Compiled module: MRD_HREAD.
+% Compiled module: FXPAR.
+% Compiled module: GETTOK.
+% Compiled module: VALID_NUM.
+% Compiled module: MRD_SKIP.
+% Compiled module: MRD_STRUCT.
+MRDFITS: Binary table.  8 columns by  29626 rows.
+% Compiled module: IS_IEEE_BIG.
+% Compiled module: IEEE_TO_HOST.
+MRDFITS: Binary table.  6 columns by  1381011 rows.
+% Compiled module: REGRESSGAL.
+
+Using 16 bins between 10.0000 and 600.000 arcseconds
+% Compiled module: EXIST.
+
+Matrix file: /sdss4/data1/esheldon/REGRESS/matrix_752_756_i_N1.txt
+e vector file: /sdss4/data1/esheldon/REGRESS/evec_752_756_i_N1.txt
+rSum file: /sdss4/data1/esheldon/REGRESS/rsum_752_756_i_N1.txt
+
+
+LASTRA =        236.11653
+FIRSTRA =        145.29928
+Finally FLAG =        0
+Using 1217169/1381011 sources
+
+         332
+Source Group = 1/87
+................
+         369
+Source Group = 2/87
+................
+         505
+Source Group = 3/87
+................
+         643
+Source Group = 4/87
+................
+         574
+Source Group = 5/87
+................
+         620
+Source Group = 6/87
+................
+         595
+Source Group = 7/87
+................
+         596
+Source Group = 8/87
+................
+         489
+Source Group = 9/87
+................
+         418
+Source Group = 10/87
+................
+         357
+Source Group = 11/87
+................
+         435
+Source Group = 12/87
+................
+         550
+Source Group = 13/87
+................
+         486
+Source Group = 14/87
+................
+         447
+Source Group = 15/87
+................
+         403
+Source Group = 16/87
+................
+         353
+Source Group = 17/87
+................
+         365
+Source Group = 18/87
+................
+         397
+Source Group = 19/87
+................
+         454
+Source Group = 20/87
+................
+         490
+Source Group = 21/87
+................
+         455
+Source Group = 22/87
+................
+         602
+Source Group = 23/87
+................
+         395
+Source Group = 24/87
+................
+         438
+Source Group = 25/87
+................
+         369
+Source Group = 26/87
+................
+         346
+Source Group = 27/87
+................
+         332
+Source Group = 28/87
+................
+         415
+Source Group = 29/87
+................
+         390
+Source Group = 30/87
+................
+         559
+Source Group = 31/87
+................
+         616
+Source Group = 32/87
+................
+         464
+Source Group = 33/87
+................
+         390
+Source Group = 34/87
+................
+         379
+Source Group = 35/87
+................
+         465
+Source Group = 36/87
+................
+         427
+Source Group = 37/87
+................
+         315
+Source Group = 38/87
+................
+         349
+Source Group = 39/87
+................
+         368
+Source Group = 40/87
+................
+         369
+Source Group = 41/87
+................
+         405
+Source Group = 42/87
+................
+         587
+Source Group = 43/87
+................
+         555
+Source Group = 44/87
+................
+         417
+Source Group = 45/87
+................
+         329
+Source Group = 46/87
+................
+         382
+Source Group = 47/87
+................
+         380
+Source Group = 48/87
+................
+         467
+Source Group = 49/87
+................
+         489
+Source Group = 50/87
+................
+         501
+Source Group = 51/87
+................
+         629
+Source Group = 52/87
+................
+         630
+Source Group = 53/87
+................
+         562
+Source Group = 54/87
+................
+         397
+Source Group = 55/87
+................
+         347
+Source Group = 56/87
+................
+         431
+Source Group = 57/87
+................
+         424
+Source Group = 58/87
+................
+         377
+Source Group = 59/87
+................
+         352
+Source Group = 60/87
+................
+         432
+Source Group = 61/87
+................
+         369
+Source Group = 62/87
+................
+         368
+Source Group = 63/87
+................
+         424
+Source Group = 64/87
+................
+         581
+Source Group = 65/87
+................
+         609
+Source Group = 66/87
+................
+         463
+Source Group = 67/87
+................
+         477
+Source Group = 68/87
+................
+         477
+Source Group = 69/87
+................
+         510
+Source Group = 70/87
+................
+         465
+Source Group = 71/87
+................
+         445
+Source Group = 72/87
+................
+         344
+Source Group = 73/87
+................
+         412
+Source Group = 74/87
+................
+         382
+Source Group = 75/87
+................
+         348
+Source Group = 76/87
+................
+         313
+Source Group = 77/87
+................
+         379
+Source Group = 78/87
+................
+         584
+Source Group = 79/87
+................
+         587
+Source Group = 80/87
+................
+         616
+Source Group = 81/87
+................
+         457
+Source Group = 82/87
+................
+         466
+Source Group = 83/87
+................
+         600
+Source Group = 84/87
+................
+         450
+Source Group = 85/87
+................
+         364
+Source Group = 86/87
+................
+          93
+Source Group = 87/87
+......
+% Compiled module: REMOVE.
+
+Finally used 1379793/1381011 Sources
+% Compiled module: FORPRINT.
+% Compiled module: DATATYPE.
+% Compiled module: TEXTOPEN.
+% Compiled module: TEXTCLOSE.
+% Compiled module: PTIME.
+Time: 48 min 46.4 sec

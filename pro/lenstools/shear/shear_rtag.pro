@@ -1,0 +1,740 @@
+PRO shear_rtag, lenscat, scat, clr, rmin, rtag, $
+                cosmo=cosmo, $
+                edgecheck=edgecheck, run1=run1, run2=run2, $
+                step=step, addstr=addstr, $
+                outdir=outdir, $
+                wgood=wgood, $
+                usecat=usecat, $
+                check=check, $
+                datfile=datfile, sumfile=sumfile, zfile=zfile, $
+                lensumfile=lensumfile, $
+                maxe=maxe
+
+  IF n_params() LT 5 THEN BEGIN
+      print,'-Syntax: shear_rtag, lenscat, scat, clr, rmin, rtag,'
+      print,'  edgecheck=edgecheck, run1=run1, run2=run2,'
+      print,'  step=step, addstr=addstr, '
+      print,'  outdir=outdir, '
+      print,'  wgood=wgood, '
+      print,'  usecat=usecat, '
+      print,'  check=check, '
+      print,'  datfile=datfile, sumfile=sumfile, zfile=zfile, '
+      print,'  lensumfile=lensumfile, '
+      print,'  maxe=maxe '
+      return
+  ENDIF 
+
+  colors = ['u','g','r','i','z']
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Some parameters
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  time = systime(1)
+
+  vint = .32^2
+  IF n_elements(cosmo) EQ 0 THEN cosmo=1
+  IF cosmo EQ 1 THEN omegamat=1.0 ELSE omegamat=0.3
+  IF n_elements(maxe) EQ 0 THEN maxe = .2
+  IF NOT keyword_set(edgecheck) THEN edgecheck = 0
+
+  ;; Size by which to group things  300 was shown to be fastest in certain
+  ;; circumstances
+  IF n_elements(step) EQ 0 THEN step = 300L
+  oldstep = step
+  IF n_elements(addstr) EQ 0 THEN addstr = 'zgal_gal'
+  IF n_elements(outdir) EQ 0 THEN outdir = '/sdss4/data1/esheldon/TMP/'
+  IF NOT keyword_set(check) THEN check=0
+
+  IF n_elements(run1) EQ 0 THEN r1str='' ELSE r1str = '_'+ntostr(run1)
+  IF n_elements(run2) EQ 0 THEN r2str='' ELSE r2str = '_'+ntostr(run2)
+  clr_str = '_'+colors[clr]
+
+  d2r = !dpi/180.0d0            ;Change degrees to radians.
+  r2d = 180./!dpi               ;radians to degrees
+
+;  nbin = long( (rmax - rmin)/binsize ) + 1 
+
+  print
+  print,'-------------------------------------------------------------'
+  IF cosmo EQ 1 THEN print,'Using lambda = 0' $
+  ELSE print,'Using lambda = 0.3'
+  print,'Rmin: ',rmin
+;  print,'Rmax: ',rmax
+;  print,'Binsize: ',binsize
+  print,'Step: ',step
+;  print,'Using ',ntostr(nbin),' bins between ',ntostr(rmin), $
+;        ' and ',ntostr(rmax),' kpc'
+
+  stags = tag_names(scat)
+  
+  momerr = where(stags EQ 'MOMERR',nerr)
+  IF nerr EQ 0 THEN BEGIN
+      momerr = where(stags EQ 'UNCERT',nerr)
+      IF nerr EQ 0 THEN BEGIN 
+          print
+          print,'No valid moment uncertainty tag'
+          print
+      ENDIF 
+  ENDIF 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; declare some arrays
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;  arrval = fltarr(nbin)
+  arrval = 0.0
+
+  shstruct = zshstruct(arrval)
+  sumstruct = zsumstruct(arrval)
+  lensumstruct = zlensumstruct(arrval)
+  lensumstruct = create_struct(lenscat[0], lensumstruct)
+  
+  lensum = replicate(lensumstruct, n_elements(lenscat) )
+ 
+  etansum    = arrval
+  eradsum    = arrval
+  etanerrsum = arrval
+  eraderrsum = arrval
+
+  tansigsum  = arrval
+  radsigsum  = arrval
+  tansigerrsum = arrval
+  radsigerrsum = arrval
+
+  wsum       = arrval
+  rsum       = arrval
+  npsum      = arrval
+  npair      = arrval
+  Sshsum     = 0.               ;Scalar
+  wsum_ssh   = 0.
+  rmax_act   = arrval
+  rmax_act_tmp = arrval
+               
+  wtotsum = 0.
+  wtotsum_ssh = 0.
+
+  ;; temporary 
+  tmpetan = arrval
+  tmperad = arrval
+  tmpetanerr = arrval
+  tmperad = arrval
+  tmperaderr = arrval
+
+  tmptansig = arrval
+  tmpradsig = arrval
+  tmptansigerr = arrval
+  tmpradsigerr = arrval
+
+  tmpwsum = arrval
+  tmprsum = arrval
+  tmpnpsum = arrval
+  tmpwsum_ssh = 0.
+  tmpSsh = 0.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Set up output files
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  prename = outdir+addstr+'_rtag'+r1str+r2str+clr_str
+  
+  datfile = prename + '_N1.fit'
+  sumfile = prename + '_sum_N1.fit'
+  zfile   = prename + '_z_N1.fit'
+  lensumfile = prename + '_lensum_N1.fit'
+
+  WHILE exist(datfile) DO BEGIN
+      datfile = newname(datfile)
+      sumfile = newname(sumfile)
+      zfile = newname(zfile)
+      lensumfile = newname(lensumfile)
+  ENDWHILE 
+  print
+  print,'Dat file: ',datfile
+  print,'Sum file: ',sumfile
+  print,'Lens sum file: ',lensumfile
+  print,'Redshift file: ',zfile
+  print
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; source cat
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;; they are already sorted
+  nsource = n_elements(scat)
+  wsource = lindgen(nsource)
+
+  FIRSTRA = scat[0].ra
+  LASTRA  = scat[nsource-1].ra
+
+  ;; check if runs cross ra=0.
+  IF FIRSTRA GT LASTRA THEN flag=1 ELSE flag=0
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Lens cat: Set up sigma crit and Dlens. 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;; make sure lenses are sorted
+  s = sort(lenscat.ra)
+  lcat = lenscat[s]
+
+  ninit = n_elements(lcat)
+  wlens = lindgen(ninit)
+
+  tagnames = tag_names(lcat)
+  wz = where(tagnames EQ 'Z1D', nz)
+  IF nz EQ 0 THEN BEGIN
+      wz = where(tagnames EQ 'Z', nz)
+      IF nz EQ 0 THEN BEGIN
+          wz = where(tagnames EQ 'PHOTOZ', nz)
+          IF nz EQ 0 THEN BEGIN 
+              print,'Lens structure must have "Z" or "PHOTOZ" or "Z1D" flag'
+              return
+          ENDIF 
+      ENDIF 
+  ENDIF 
+
+  wrtag = where(tagnames EQ strupcase(rtag), nrtag)
+  IF nrtag EQ 0 THEN BEGIN 
+      print,'No such radius tag: ',rtag
+      return
+  ENDIF 
+
+  h=1.
+  print,'Using h = ',h
+  print,'Calculating 1/sigma_crit'
+  print
+
+  sigcritinv = sdss_sigma_crit(clr, lcat.(wz[0]), wgood=wgood, cosmo=cosmo)
+  sigmacrit = 1./sigcritinv
+  wlens = wlens[wgood]
+
+  DL = angdist_lambda( lcat.(wz[0]), h=h, omegamat=omegamat)*1000. ;Convert from Mpc to kpc
+
+  nlens1 = n_elements(wlens)
+  print,'Threw out ',ntostr(ninit - nlens1),' lenses because too deep or zero'
+
+  angmax = lcat.(wrtag[0])*1000./DL*180./!pi
+
+  ;; copy in the stuff we need into lensum struct
+  copy_struct, lcat, lensum
+  lensum.scritinv = sigcritinv
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Throw out by _edge_ if requested (rather than just symmety of background dist.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  maxdec = max(scat.dec )
+  mindec = min(scat.dec )
+
+  bad = -1
+  IF edgecheck THEN BEGIN 
+                                     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      IF flag THEN BEGIN             ;;; Runs go through ra = 0.
+          FOR i=0, nlens1-1 DO BEGIN ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+              ii = wlens[i]
+              IF ( (maxdec - lcat[ii].dec LE angmax[ii]) OR $
+                   (lcat[ii].dec - mindec LE angmax[ii]) ) THEN BEGIN 
+                  IF bad[0] EQ -1 THEN bad = i ELSE bad=[bad,i]
+              ENDIF ELSE BEGIN 
+                  IF rmdiff1 LT angmax[ii] THEN BEGIN 
+                      rmd = angmax[ii] - rmdiff1
+                      IF ( (lcat[ii].ra LE rmdiff1) OR $
+                           (LASTRA - lcat[ii].ra LE angmax[ii]) ) THEN BEGIN
+                          IF bad[0] EQ -1 THEN bad = i ELSE bad=[bad,i]
+                      ENDIF 
+                  ENDIF ELSE IF LASTRA LT angmax[ii] THEN BEGIN 
+                      rmdiff2 = angmax[ii] - LASTRA
+                      IF ( (lcat[ii].ra - FIRSTRA LE angmax[ii]) OR $
+                           (lcat[ii].ra GE (360.-rmdiff2)) ) THEN BEGIN
+                          IF bad[0] EQ -1 THEN bad = i ELSE bad=[bad,i]
+                      ENDIF 
+                  ENDIF ELSE BEGIN 
+                      IF ( (lcat[ii].ra - FIRSTRA LE angmax[ii]) AND $
+                           (LASTRA - lcat[ii].ra LE angmax[ii] ) ) THEN BEGIN
+                          IF bad[0] EQ -1 THEN bad = i ELSE bad=[bad,i]
+                      ENDIF 
+                  ENDELSE 
+              ENDELSE 
+          ENDFOR                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ENDIF ELSE BEGIN          ;; Runs do not go through ra=0.
+                                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          FOR i=0, nlens1-1 DO BEGIN 
+              ii = wlens[i]
+              amax = angmax[ii]
+              IF ( ( LASTRA - lcat[ii].ra LE amax) OR $
+                   ( lcat[ii].ra - FIRSTRA LE amax) OR $
+                   ( maxdec - lcat[ii].dec LE amax) OR $
+                   ( lcat[ii].dec - mindec LE amax) ) THEN BEGIN 
+                  IF bad[0] EQ -1 THEN bad = i ELSE bad=[bad,i]
+              ENDIF 
+          ENDFOR 
+      ENDELSE 
+
+      IF bad[0] NE -1 THEN remove, bad, wlens
+
+  ENDIF   
+
+  IF check THEN BEGIN           ;May just want to find the good lenses.
+      wgood = wlens
+      return
+  ENDIF 
+
+  nlens = n_elements(wlens)
+  print,'Threw out ',ntostr(nlens1-nlens),' edge lenses'
+  print
+  print,'LASTRA = ',LASTRA
+  print,'FIRSTRA = ',FIRSTRA
+  print,'Finally FLAG = ',FLAG
+  print,'Using '+ntostr(nlens)+'/'+ntostr(ninit)+' lenses'
+  print
+  print,'-------------------------------------------------------------'
+  print
+
+  IF nlens LT 100 THEN sym = 1 ELSE sym = 3
+  
+  lra = lcat.ra
+  ldec = lcat.dec
+  ttt='Lenses'
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Estimate shear around all of these lenses
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  nstepOld = nlens/step
+  nstep=nstepOld
+  left = nlens MOD step
+  
+  ;; To account for leftover stuff
+  IF nstepOld EQ 0 THEN BEGIN
+      nstepOld = -10
+      step = left
+      nstep = 1
+  ENDIF ELSE BEGIN
+      IF left NE 0 THEN nstep = nstepOld + 1
+  ENDELSE 
+
+  indices = lindgen(nlens)
+  FOR group = 0L, nstep-1 DO BEGIN
+      IF group EQ nstepOld THEN BEGIN
+          ind = indices[ group*step: group*step+left-1  ]
+          ii = wlens[ind]
+          step = left
+      ENDIF ELSE BEGIN
+          ind = indices[ group*step : (group+1)*step -1 ]
+          ii = wlens[ind]
+      ENDELSE 
+
+      ;; Choose sources around this lens group
+      ;; they are sorted by ra, but it could go over ra=0
+      angmax2 = max(angmax[ii])
+      
+      maxii = wlens[ max(ind) ] & minii = wlens[ min(ind) ]
+;      maxii = max(ii) & minii = min(ii)
+
+      w=where(lra[ii] GT lra[maxii] OR lra[ii] LT lra[minii], nw)
+      IF nw NE 0 THEN BEGIN 
+          print,'What 1!'
+          return
+      ENDIF 
+
+      tmpmaxra = lra[maxii]+angmax2
+      tmpminra = lra[minii]-angmax2
+
+      diff1 = 360. - tmpmaxra
+      
+      ;; quick fix
+      IF flag NE 0 THEN BEGIN 
+          CASE 1 OF 
+              diff1 LT 0.: wsrc = where(scat.ra GE tmpminra OR $
+                                        scat.ra LE abs(diff1), nwsrc )
+              tmpminra LT 0: wsrc = where(scat.ra GE (360.-abs(tmpminra)) OR $
+                                          scat.ra LE tmpmaxra, nwsrc)
+              tmpmaxra LT tmpminra: wsrc = where(scat.ra GE tmpminra OR $
+                                                 scat.ra LE tmpmaxra, nwsrc)
+              ELSE: wsrc = where(scat.ra LE tmpmaxra AND $
+                                 scat.ra GE tmpminra, nwsrc)
+          ENDCASE 
+      ENDIF ELSE BEGIN 
+          ra1 = tmpminra
+          ra2 = tmpmaxra
+
+          binary_search, scat.ra, ra1, i1, /round
+          binary_search, scat.ra, ra2, i2, /round
+          IF (i1 EQ -1) AND (i2 EQ -1) THEN BEGIN 
+              nwsrc = 0
+          ENDIF ELSE BEGIN 
+              IF i1 EQ -1 THEN i1 = 0
+              IF i2 EQ -1 THEN i2 = nsource-1
+              wsrc = wsource[i1:i2]
+              nwsrc = n_elements(wsrc)
+          ENDELSE 
+      ENDELSE 
+
+      IF nwsrc NE 0 THEN BEGIN 
+          
+          xrel = dblarr(nwsrc)
+          yrel = xrel
+          print,'Lens Group = ',ntostr(group+1)+'/'+ntostr(nstep)
+          FOR gi=0L, step-1 DO BEGIN ;Loop over lenses in group
+              IF (gi MOD 10) EQ 0 THEN  print,'.',format='(a,$)'
+              index = ii[gi]
+              cendec = ldec[index]
+              cenra  = lra[index]
+
+              sig_crit = sigmacrit[index]
+              sig_inv = sigcritinv[index]
+              IF sig_inv EQ -1000. THEN BEGIN 
+                  print,'What!'
+                  return
+              ENDIF 
+              angmax_i = angmax[index]
+              rmax = lcat[index].(wrtag[0])*1000.
+
+              ;; choose sources around this lens
+              tmpmaxra = cenra+angmax_i
+              tmpminra = cenra-angmax_i
+              IF flag NE 0 THEN BEGIN 
+                  ;; Quick Fix
+                  wsrc2=wsrc
+                  nwsrc2=nwsrc
+              ENDIF ELSE BEGIN 
+                  ra1 = tmpminra
+                  ra2 = tmpmaxra
+                  binary_search, scat[wsrc].ra, ra1, i1, /round
+                  binary_search, scat[wsrc].ra, ra2, i2, /round
+                  IF (i1 EQ -1) AND (i2 EQ -1) THEN BEGIN 
+                      nwsrc2 = 0
+                  ENDIF ELSE BEGIN 
+                      IF i1 EQ -1 THEN i1 = 0
+                      IF i2 EQ -1 THEN i2 = nwsrc-1
+                      wsrc2 = wsrc[i1:i2]
+                      nwsrc2 = n_elements(wsrc2)
+                  ENDELSE 
+              ENDELSE 
+
+              ;; If there are any sources left, measure the shear
+              IF nwsrc2 NE 0 THEN BEGIN 
+
+                  radiff = (cenra-scat[wsrc2].ra)*d2r
+                  cosradiff = cos(radiff)
+            
+                  tcendec = cendec*d2r
+                  sincendec=sin(tcendec)
+                  coscendec=cos(tcendec)
+                  
+                  tscatdec = scat[wsrc2].dec*d2r
+                  sinscatdec = sin(tscatdec)
+                  cosscatdec = cos(tscatdec)
+      
+                  ;; Find distance in kpc
+                  args = sincendec*sinscatdec +coscendec*cosscatdec*cosradiff
+                  warg = where(args LT -1., narg)
+                  IF narg NE 0 THEN args[warg] = -1.
+                  warg = where(args GT 1., narg)
+                  IF narg NE 0 THEN args[warg] = 1.
+
+                  R=acos( args )*DL[index]
+                  wrf = where(R LE rmax AND R GE rmin, npair)
+                  ng=0
+
+                  ;; Check if there are any in this annulus rmin-rmax
+                  IF npair NE 0 THEN BEGIN 
+
+                      rmax_act_tmp = max(R[wrf])
+                      rmax_act = max( [rmax_act, rmax_act_tmp] )
+                              
+                      theta=atan(sin(radiff[wrf]), $
+                                 (sincendec*cosradiff[wrf] - $
+                                  coscendec*sinscatdec[wrf]/cosscatdec[wrf]) )-!dpi
+                      xrel[wrf] = R[wrf]*cos(theta)
+                      yrel[wrf] = R[wrf]*sin(theta)
+                      diffsq=xrel[wrf]^2 - yrel[wrf]^2
+                      xy=xrel[wrf]*yrel[wrf]
+                              
+                      e1prime=-(scat[wsrc2[wrf]].e1*diffsq + $
+                                scat[wsrc2[wrf]].e2*2.*xy  )/R[wrf]^2
+                      e2prime= (scat[wsrc2[wrf]].e1*2.*xy - $
+                                scat[wsrc2[wrf]].e2*diffsq )/R[wrf]^2
+
+                      ;; also weighting by 1/sigmacrit
+                      wts_ssh = 1./( vint + scat[wsrc2[wrf]].(momerr[0])^2)
+                      wts = wts_ssh*sig_inv^2
+                              
+                      tmprsum = total(R[wrf])
+                      tmpnpsum = npair
+
+                      tmpetan = total(e1prime*wts)
+                      tmperad = total(e2prime*wts)
+                      tmptansig = tmpetan*sig_crit
+                      tmpradsig = tmperad*sig_crit
+
+                      tmpetanerr=total(wts^2*e1prime^2)
+                      tmperaderr=total(wts^2*e2prime^2)
+                      tmptansigerr = tmpetanerr*sig_crit^2
+                      tmpradsigerr = tmperaderr*sig_crit^2
+
+                      ;; Ssh weighted differently: no weight by sig_crit
+                      tmpSsh = tmpSsh+total( wts_ssh*(1.-vint*wts_ssh*e1prime^2) )
+
+                      tmpwsum = total(wts)
+                      tmpwsum_ssh = tmpwsum_ssh + total(wts_ssh)
+
+                      ;; free memory
+                      theta = 0 & e1prime=0 & e2prime=0 & wts=0 & w=0
+                      diffsq = 0 & xy=0
+
+                      ;; make sure it has a reasonably symmetric distribution
+                      ;; of sources behind it.  (this is what phil does)
+                      wg=where(xrel NE 0., ng)
+
+                      ixx = total(xrel[wg]^2)
+                      iyy = total(yrel[wg]^2)
+                      ixy = total(xrel[wg]*yrel[wg])
+                      dd = ixx+iyy
+                      ie1 = (ixx-iyy)/dd
+                      ie2 = 2.*ixy/dd
+                      ie = sqrt( ie1^2 + ie2^2 )
+                      mm = 3./sqrt(ng)
+
+                      ;; maxe defined above
+                      IF ie LE max([mm, maxe]) THEN BEGIN 
+                          npsum = npsum + tmpnpsum
+                          rsum = rsum + tmprsum
+                          etansum = etansum + tmpetan
+                          eradsum = eradsum + tmperad
+                          tansigsum = tansigsum + tmptansig
+                          radsigsum = radsigsum + tmpradsig
+
+                          etanerrsum=etanerrsum+tmpetanerr
+                          eraderrsum=eraderrsum+tmperaderr
+                          tansigerrsum=tansigerrsum+tmptansigerr
+                          radsigerrsum=radsigerrsum+tmpradsigerr
+                              
+                          Sshsum = Sshsum+tmpSsh
+                              
+                          wsum = wsum + tmpwsum
+                          wsum_ssh = wsum_ssh + tmpwsum_ssh
+
+                          ;; copy in individual lens stuff
+                          lensum[index].totpairs = total(tmpnpsum)
+                          lensum[index].npair = tmpnpsum
+                          lensum[index].ie = ie
+                          lensum[index].rmax_act = rmax_act_tmp
+                          lensum[index].rsum = tmprsum
+                          lensum[index].etansum = tmpetan
+                          lensum[index].eradsum = tmperad
+                          lensum[index].tansigsum = tmptansig
+                          lensum[index].radsigsum =  tmpradsig
+
+                          lensum[index].etanerrsum = tmpetanerr
+                          lensum[index].eraderrsum = tmperaderr
+                          lensum[index].tansigerrsum = tmptansigerr
+                          lensum[index].radsigerrsum = tmpradsigerr
+
+                          lensum[index].sshsum = tmpSsh
+
+                          lensum[index].wsum = tmpwsum
+                          lensum[index].wsum_ssh = tmpwsum_ssh
+
+                      ENDIF ELSE BEGIN 
+                          ng=0
+                      ENDELSE 
+                      ;; reinitialize the arrays
+                      xrel[wg] = 0. & yrel[wg] = 0.
+                      tmpetan = 0.
+                      tmperad = 0.
+                      tmptansig = 0.
+                      tmpradsig = 0.
+
+                      tmpetanerr = 0.
+                      tmperaderr = 0.
+                      tmptansigerr = 0.
+                      tmpradsigerr = 0.
+
+                      tmpwsum = 0.
+                      tmprsum = 0.
+                      tmpnpsum = 0.
+                      tmpwsum_ssh = 0.
+                      tmpSsh = 0.
+                  ENDIF 
+                  ;; One final check.  If not passed, remember that this lens wasn't used
+                  IF ng EQ 0 THEN BEGIN 
+                      print,'/',format='(a,$)'
+                      indices[ ind[gi] ] = -1
+                  ENDIF 
+
+                  R = 0
+                  radiff=0      ;Free memory
+              ENDIF ELSE BEGIN
+                  print,'|',format='(a,$)'
+                  indices[ ind[gi] ] = -1
+              ENDELSE 
+
+          ENDFOR 
+          print
+          xrel = 0 & yrel = 0
+      ENDIF ELSE BEGIN 
+          print,'Two-'
+          indices[ ind ] = -1
+      ENDELSE 
+      mradiff = 0               ;Free memory
+      mdist = 0
+
+  ENDFOR 
+  ;; Remove unused lenses
+  wbad = where(indices EQ -1, nwbad)
+  IF nwbad NE 0 THEN remove, wbad, wlens
+  lensused = n_elements(wlens)
+  
+  wgood = wlens
+
+  lensw = sigcritinv[wlens]^2*lensum[wlens].totpairs
+  lenswsum = total( lensw )
+  zsum = total(lcat[wlens].(wz[0])*lensw)
+  zmean = zsum/lenswsum
+  print
+  print,'zmean = ',zmean
+  print
+
+  scritinvsum = total( sigcritinv[wlens]*lensw )
+  meanscritinv = scritinvsum/lenswsum
+  print
+  print,'meanscritinv: ',meanscritinv
+  print
+
+  ;; for this, we set rmax_act to the average rtag value (kpc)
+  rtagsum = total( lcat[wlens].(wrtag[0])*1000.*lensw )
+  rmax_act = rtagsum/lenswsum
+  rmaxerr = sqrt( total( lensw^2*(lcat[wlens].(wrtag[0])*1000. - rmax_act)^2 )/lenswsum^2 )
+  rmax = rmaxerr
+  print
+  print,'mean rtag: ',rmax_act
+  print,'rtag error: ',rmax
+  print
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Find averages from sums
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  print
+  print,'Finally used ',ntostr(lensused),'/',ntostr(nlens),' Lenses'
+
+  totpairs = 0.0
+
+  ;; shear struct for this set of lenses
+  shstruct.meanr = rsum/npsum
+
+  shstruct.shear = etansum/wsum/2.
+  shstruct.shearerr = sqrt(etanerrsum/wsum^2)/2.
+  shstruct.ortho = eradsum/wsum/2.
+  shstruct.orthoerr = sqrt(eraderrsum/wsum^2)/2.
+
+  shstruct.sigma = tansigsum/wsum/2.
+  shstruct.sigmaerr = sqrt( tansigerrsum/wsum^2 )/2.
+  shstruct.orthosig = radsigsum/wsum/2.
+  shstruct.orthosigerr = sqrt( radsigerrsum/wsum^2 )/2.
+  shstruct.npair = npsum
+
+  ;; Now totals within each rmax_act
+  shstruct.tshear = etansum/wsum/2.
+  shstruct.tshearerr = sqrt( etanerrsum/wsum^2 )/2.
+  shstruct.tortho = eradsum/wsum/2.
+  shstruct.torthoerr = sqrt( eraderrsum/wsum^2 )/2.
+
+  shstruct.tsigma = tansigsum/wsum/2.
+  shstruct.tsigmaerr = sqrt( tansigerrsum/wsum^2 )/2.
+  shstruct.torthosig = radsigsum/wsum/2.
+  shstruct.torthosigerr = sqrt( radsigerrsum/wsum^2 )/2.
+  shstruct.tnpair = npsum
+
+  ;; calculate area, density of background galaxies
+  R1 = rmin
+  R2 = rmin + rmax_act
+  shstruct.area = !pi*(R2^2 - R1^2)
+  shstruct.density = shstruct.npair/shstruct.area/lensused
+      
+  ;; sum struct for adding to other sets of lenses
+  sumstruct.rsum = rsum
+
+  sumstruct.etansum = etansum
+  sumstruct.etanerrsum = etanerrsum
+  sumstruct.eradsum = eradsum
+  sumstruct.eraderrsum = eraderrsum
+
+  sumstruct.tansigsum = tansigsum
+  sumstruct.tansigerrsum = tansigerrsum
+  sumstruct.radsigsum = radsigsum
+  sumstruct.radsigerrsum = radsigerrsum
+
+  sumstruct.wsum = wsum
+  sumstruct.wsum_ssh = wsum_ssh
+  sumstruct.npair = npsum
+
+  totpairs = totpairs + npsum
+                          
+  Ssh = Sshsum/wsum_ssh
+
+  shstruct.nlenses = lensused
+  shstruct.totpairs = totpairs
+;  shstruct.binsize = binsize
+  shstruct.rmin = rmin
+  shstruct.rmax = rmax
+  shstruct.rmax_act = rmax_act
+  shstruct.ssh = ssh
+  shstruct.zmean = zmean
+  shstruct.meanscritinv = meanscritinv
+  shstruct.h = h
+
+  sumstruct.nlenses = lensused
+  sumstruct.totpairs = totpairs
+;  sumstruct.binsize = binsize
+  sumstruct.rmin = rmin
+  sumstruct.rmax = rmax
+  sumstruct.rmax_act = rmax_act
+  sumstruct.sshsum = Sshsum
+  sumstruct.lenswsum = lenswsum
+  sumstruct.zsum = zsum
+  sumstruct.scritinvsum = scritinvsum
+  sumstruct.h = h
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Ouput the data
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;; Shear file for these lenses
+  shhdr = zshhdr(shstruct)      
+  mwrfits, shstruct, datfile, shhdr, /create
+
+  ;; Sum file for these lenses
+  sumhdr = zsumhdr(sumstruct)
+  lhdr = sumhdr
+  mwrfits, sumstruct, sumfile, sumhdr, /create
+
+  ;; File with structure for each lens used
+  lensum = temporary(lensum[wlens])
+  lensum.zindex = lindgen(lensused)
+  mwrfits, lensum, lensumfile, lhdr, /create
+
+  ;; File containing ra,dec,redshift for each used lens
+  zs = create_struct('z', 0., $
+                     'sigcritinv', 0., $
+                     'ra', double(0.), $
+                     'dec', double(0.) )
+  zstruct = replicate(zs, lensused)
+  zstruct.z = lcat[wlens].(wz[0])
+  zstruct.sigcritinv = sigcritinv[wlens]
+  zstruct.ra = lcat[wlens].ra
+  zstruct.dec = lcat[wlens].dec
+
+  mwrfits, zstruct, zfile, /create
+
+  step=oldstep
+;  ep
+
+  usecat = lcat[wlens]
+
+  ptime, systime(1)-time
+  return
+END 

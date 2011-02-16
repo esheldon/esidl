@@ -1,0 +1,14 @@
+#!/bin/sh
+
+cd src
+
+codedirs=`ls | grep -v DLM`
+
+for dir in $codedirs; do
+    if [ -d $dir ]; then
+        echo "Configuring code directory: $dir"
+        cd $dir
+        ./configure
+        cd ..
+    fi
+done

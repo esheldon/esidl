@@ -1,0 +1,569 @@
+PRO m_ap, run1, run2, clr, struct, $
+          binsize0=binsize0, step=step, nstep=nstep,$
+          domap=domap, $
+          get=get, $
+          star=star,$
+          hist=hist, $
+          dir=dir
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;+
+;
+; NAME:
+;       
+; PURPOSE:
+;	
+;
+; CALLING SEQUENCE:
+;      
+;                 
+;
+; INPUTS: 
+;
+; OPTIONAL INPUTS:
+;
+; KEYWORD PARAMETERS:
+;
+;       
+; OUTPUTS: 
+;
+; OPTIONAL OUTPUTS:
+;
+; CALLED ROUTINES:
+; 
+; PROCEDURE: 
+;	
+;	
+;
+; REVISION HISTORY:
+;	
+;       
+;                                      
+;-                                       
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+  IF N_params() LT 3 THEN BEGIN 
+      print,'-Syntax: m_ap, run1, run2, clrindex [, struct, binsize0=binsize0, step=step, nstep=nstep, domap=domap, combine=combine, get=get, stars=stars, hist=hist]'
+      print,''
+      print,'Use doc_library,"binradec"  for more help.'  
+      return
+  ENDIF 
+  
+  pold=!p.multi
+  !p.multi=[0,1,2]
+
+  tt = systime(1)
+
+  COMMON par, minra,maxra,mindec,maxdec,radiff,decdiff
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Some parameters
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;; Defaults
+  ;; side of the initial binsize in degrees. 
+  ;; .2276 = side of frame in column directon.  But: overlap reduces
+  ;; what we can fit.  For 12 across use .21
+  IF n_elements(binsize0) EQ 0 THEN binsize0 =  0.21     
+  IF n_elements(nstep) EQ 0 THEN nstep = 11
+  IF n_elements(step) EQ 0 THEN step = binsize0
+
+  ;; take .32 as intrinsic spread in weight
+  spread = .32
+
+;  binsize0 = .1  ; 1 square degree on 10th bin
+;  step = binsize0  ; how much to increase binsize by each time
+;  nstep = 26
+
+  IF keyword_set(domap) THEN domap=1 ELSE domap=0
+  IF keyword_set(get) THEN get=1 ELSE get=0
+  IF keyword_set(hist) THEN hist = 1 ELSE hist = 0
+  IF keyword_set(star) THEN star=1 ELSE star=0
+  IF NOT keyword_set(dir) THEN dir = '/sdss4/data1/esheldon/CORRECTED/'
+  IF star THEN nnm='star' ELSE nnm='srcgal'
+  imdir = dir+'SHAPEIM/'+nnm+'/'
+
+  colors=['u','g','r','i','z']
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Get the 2 interleaved runs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  r1str = ntostr(run1)
+  r2str = ntostr(run2)
+
+  IF get THEN BEGIN
+      sname=dir+'run'+r1str+'_'+r2str+'_'+nnm+'_'+colors[clr]+'_overlap.fit'
+      IF NOT exist(sname) THEN $
+        sname=dir+'run'+r2str+'_'+r1str+'_'+nnm+'_'+colors[clr]+'_overlap.fit'
+      IF NOT exist(sname) THEN BEGIN
+          print,'No overlap file exists for these two runs'
+          return
+      ENDIF 
+      struct = mrdfits(sname, 1, hdr)
+  ENDIF 
+  minra = min(struct.ra)
+  maxra = max(struct.ra)
+  mindec = min(struct.dec)
+  maxdec = max(struct.dec)
+  radiff  = maxra - minra
+  decdiff = maxdec - mindec
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Open the files
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  prename = 'run'+r1str+'_'+r2str+'_'+nnm+'_'+colors[clr]+'_bin'
+
+  i=1
+  istr = '_'+ntostr(i)
+  psname = dir+prename+istr+'_N1.ps'
+  dataname = dir+prename+istr+'_N1.dat'
+  WHILE exist(psname) OR exist(dataname) DO BEGIN 
+      psname = newname(psname)
+      dataname = newname(dataname)
+  ENDWHILE 
+      
+  print, 'postscript file: ',psname
+  print, 'data file:       ',dataname
+
+  logname = dir+'log.txt'
+  openw, lun1, logname, /get_lun
+
+  openw, lun2, dataname, /get_lun
+  !textunit = lun2
+
+
+  printf, lun1, '  #bins  sq.deg/bin  sq.deg.  Maperr   raderr  nobj/bin'
+  printf, lun1, '-------------------------------------------------------'
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; save time by declaring arrays
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  binsize = dblarr(nstep)
+  tmpmaxra= binsize
+  tmpmaxdec = binsize
+  ta      = binsize
+  nra     = lonarr(nstep)
+  ndec    = nra
+  nb      = nra
+
+  bina    = binsize
+  nobjavg = binsize
+  nobjavgerr = binsize
+  nobjtot = binsize
+  
+  Map       = binsize           ; -average aperture mass over all bins
+  rad       = binsize           ; -average radial
+  Mapuncert = binsize           ; -uncertainty in this average
+  raduncert = binsize           ;  Note this is VERY different from Maperr
+
+  aMaperr   = binsize
+  araderr   = binsize
+          
+
+  FOR ci=0, nstep-1 DO BEGIN
+      binsize[ci] = binsize0 + ci*step
+
+      ;; Number of bins in each direction
+      nra[ci] = long( radiff/binsize[ci] ) > 1
+      ndec[ci] = long( decdiff/binsize[ci] ) > 1
+      tmpmaxra[ci] = minra + nra[ci]*binsize[ci]
+      tmpmaxdec[ci] = mindec + ndec[ci]*binsize[ci]
+
+      ;; bin area in sq. deg.
+      bina[ci] = binsize[ci]^2
+
+      ;; total no. of bins.
+      nb[ci] = nra[ci]*ndec[ci]
+
+      ;; total area used
+      ta[ci] = nb[ci]*bina[ci]
+  ENDFOR 
+
+  ;; images
+  IF domap THEN BEGIN 
+      imMap = dblarr(ndec[0], nra[0])
+      imrad = imMap
+      imra = imMap
+      imdec = imMap
+      imnum = lonarr(ndec[0], nra[0])
+  ENDIF 
+
+  ;; temporary arrays
+  bMap = dblarr(ndec[0], nra[0])
+  bMap = bMap
+  brad = bMap
+  bMaperr = bMap
+  braderr = bMap
+          
+  nobj = lonarr(ndec[0], nra[0])
+  index=lindgen(ndec[0], nra[0]) ;Used to subscript arrays
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Bin by various sizes. 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  FOR ci = 0, nstep-1 DO BEGIN 
+
+      print
+      print,ntostr(ci+1)+'/'+ntostr(nstep)
+      print,ntostr(nra[ci])+' dots'
+
+      ; Get averages in each bin in both directions
+      
+      Rmax = binsize[ci]/2.
+      binarr, struct.ra, binsize[ci], minra, tmpmaxra[ci], rev_ind1
+      FOR ira = 0L, nra[ci]-1 DO BEGIN 
+          print, format='($,A)', '.'
+          w1 = rev_ind1( rev_ind1[ira]:rev_ind1[ira+1]-1 ) 
+
+          binarr, struct[w1].dec, binsize[ci], mindec, tmpmaxdec[ci], rev_ind2
+          FOR idec = 0L, ndec[ci]-1 DO BEGIN 
+
+              w2 = rev_ind2( rev_ind2[idec]:rev_ind2[idec+1]-1 ) 
+              w = w1[w2]
+              
+              ra1 = min(struct[w].ra)
+              ra2 = max(struct[w].ra)
+              dec1 = min(struct[w].dec)
+              dec2 = max(struct[w].dec)
+
+              ra = (ra1 + ra2)/2.
+              dec = (dec1 + dec2)/2.
+
+              qmom, struct[w].e1, struct[w].e2, struct[w].dec, struct[w].ra, $
+                    ra, dec, Rmax, sqrt( spread^2 + struct[w].uncert^2 ), $
+                    tempMap, temprad, tempMaperr, tempraderr, nobj=tempnobj
+
+              binMap[idec,ira] = tempMap
+              binrad[idec,ira] = temprad
+              binMaperr[idec,ira] = tempMaperr
+              binraderr[idec,ira] = tempraderr
+          
+              nobj[idec,ira] = tempnobj
+
+              IF domap THEN BEGIN 
+                  imMap[idec, ira] = tempMap
+                  imrad[idec, ira] = temprad
+                  imnum[idec, ira] = tnobj
+                  imra[idec, ira]=(ra1+ra2)/2.
+                  imdec[idec, ira]=(dec1+dec2)/2.
+              ENDIF 
+              
+          ENDFOR 
+      ENDFOR 
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ; Output the images
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+      ;; Indices to use
+      jj = index[0:idec-1, 0:ira-1] ;; -1 because of loop exit status
+
+      IF domap THEN BEGIN 
+          nrastr = ntostr(nra[ci])
+          ndecstr = ntostr(ndec[ci])
+          fMap=imdir+'Mapim_'+nnm+'_'+colors[clr]+nrastr+'x'+ndecstr+'.fit'
+          frad=imdir+'radim_'+nnm+'_'+colors[clr]+nrastr+'x'+ndecstr+'.fit'
+          fnum=imdir+'nim_'+nnm+'_'+colors[clr]+nrastr+'x'+ndecstr+'.fit'
+          fra=imdir+'raim_'+nnm+'_'+colors[clr]+nrastr+'x'+ndecstr+'.fit'
+          fdec=imdir+'decim_'+nnm+'_'+colors[clr]+nrastr+'x'+ndecstr+'.fit'
+          print
+          print,'Creating images: ',imdir+'*_'+$
+                nnm+'_'+colors[clr]+nrastr+'x'+ndecstr+'.fit'
+          writefits, fMap,   imMap[jj]
+          writefits, frad,   imrad[jj]
+          writefits, fnum, imnum[jj]
+          writefits, fra,   imra[jj]
+          writefits, fdec, imdec[jj]
+      ENDIF 
+
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ;; Get averages from the individual bins
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+      vobj = variance(nobj[jj])
+      tnobjavgerr = sqrt(vobj/nb[ci])
+      tnobjavg=median(nobj[jj])
+      tnobjtot=total(nobj[jj])
+      
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ; find bin to bin spread
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+      vMap = variance(binMap[jj])
+      vrad = variance(binrad[jj])
+      s1=sqrt(vMap)
+      s2=sqrt(vrad)
+
+      var1 = binMaperr[jj]^2
+      var2 = binraderr[jj]^2
+      
+      v1int = (vMap - median(var1) ) > 0.
+      v2int = (vrad - median(var2) ) > 0.
+      IF v1int EQ 0 THEN print,'Dohh1'
+      IF v2int EQ 0 THEN print,'Dohh2'
+      
+      wmom, be1[jj], sqrt(v1int + var1), tbe1, tbe1sig, tbe1uncert, tbe1sigerr
+      wmom, binrad[jj], sqrt(v2int + var2), tbinrad, tbinradsig, tbinraduncert, tbinradsigerr
+
+      ;; Using standard Unweighted formula
+      tbinMapsigerr = tbinMapsig/sqrt(2*nb[ci])
+      tbinradsigerr = tbinradsig/sqrt(2*nb[ci])
+
+      IF hist THEN BEGIN 
+          plothist, binMap[jj], bin=.16*s1,xstyle=1, xrange=[-.2,.2],$
+            xtitle='Map',title=title
+          plothist, binrad[jj], bin=.16*s2,xstyle=1,  xrange=[-.2,.2],$
+            xtitle='rad',title=title
+          key=get_kbrd(20)
+      ENDIF 
+
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ; Find mean uncertainty for each binning
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+      v1 = variance(binMaperr[jj])
+      v2 = variance(binraderr[jj])
+
+      s1 = sqrt(v1)
+      s2 = sqrt(v2) 
+
+      ;; Weighted 
+      ; Estimate intrinsic spread for weighting
+      var1 = binMaperrerr[jj]^2
+      var2 = binraderrerr[jj]^2
+
+      v1int = (v1 - median(var1) ) > 0.
+      v2int = (v2 - median(var2) ) > 0.
+
+      IF v1int EQ 0 THEN print,'Dohh2'
+      IF v2int EQ 0 THEN print,'Dohh3'
+
+      wmom, be1err[jj], sqrt( v1int + var1 ), tbe1err, tbe1errsig, tbe1errerr
+      wmom, binraderr[jj], sqrt( v2int + var2 ), tbinraderr, tbinraderrsig, tbinraderrerr
+
+      ;; Unweighted formulae
+
+;      tbe1err = median(be1err)
+;      tbe2err = median(be2err)
+;      tbe1errsig = s1
+;      tbe2errsig = s2
+;      tbe1errerr = tbe1errsig/sqrt(nb[ci])
+;      tbe2errerr = tbe2errsig/sqrt(nb[ci])
+
+      IF hist THEN BEGIN 
+          plothist, binMaperr[jj], bin=.16*s1,xrange=[0,.07],xstyle=1, $
+            xtitle='Maperr',title=title
+          plothist, binraderr[jj], bin=.16*s2,xrange=[0,.07],xstyle=1, $
+            xtitle='raderr',title=title
+          key=get_kbrd(20)
+      ENDIF 
+
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+      ; Approximate values (a for approximate)
+      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+      taMaperr = 0.32/sqrt(tnobjavg)
+      taraderr = 0.32/sqrt(tnobjavg)
+
+      out='   '+ntostr(nb[ci],6)+'     '+ntostr(bina[ci],6)+'   '
+      out=out+ntostr(ta[ci],6)+'   '
+      out=out+ntostr(tbinMaperr,7)+'  '+ntostr(tbinraderr,7)+'   '
+      out=out+ntostr(tnobjavg,6) 
+      printf, lun1, out
+
+      nobjavg[ci] = tnobjavg
+      nobjavgerr[ci] = tnobjavgerr
+      nobjtot[ci] = tnobjtot
+
+      Map[ci] = tbinMap             ; -average Map over all bins
+      rad[ci] = tbinrad
+      Mapuncert[ci] = tbinMapuncert ; -uncertainty in this average
+      raduncert[ci] = tbinraduncert ;  Note this is VERY different from Maperr which
+      Mapsig[ci] = tbinMapsig       ;  is average uncertainty for a given bin
+      radsig[ci] = tbinradsig       ; -spread around average
+      Mapsigerr[ci] = tbinMapsigerr ; -Error in sigma.
+      radsigerr[ci] = tbinradsigerr
+
+      Maperr[ci] = tbinMaperr       ; -Average uncertainty over this sized bins
+      raderr[ci] = tbinraderr       ;  Found uncertainty in each bin and averaged
+      Maperrerr[ci] = tbinMaperrerr
+      raderrerr[ci] = tbinraderrerr
+
+      aMaperr[ci] = taMaperr
+      araderr[ci] = taraderr
+
+  ENDFOR 
+      
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Sort them by bin area
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  s=sort(bina)
+  bina = bina(s)
+
+  nobjavg = nobjavg(s)
+  nobjavgerr = nobjavgerr(s)
+  nobjtot = nobjtot(s)
+  Map = Map[s]
+  rad = rad[s]
+  Mapuncert = Mapuncert[s]
+  raduncert = raduncert[s]
+  Mapsig = Mapsig[s]
+  radsig = radsig[s]
+  Mapsigerr = Mapsigerr[s]
+  radsigerr = radsigerr[s]
+
+  Maperr = Maperr(s)
+  raderr = raderr(s)
+  Maperrerr = Maperrerr(s)
+  raderrerr = raderrerr(s)
+
+  aMaperr = aMaperr(s)
+  araderr = araderr(s)
+  
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Plot and print the results
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  mes=    '      binarea'
+  mes1=mes+'         Maperr        Maperrerr         raderr          raderrerr'
+  mes2=mes+'         Mapsig        Mapsigerr         radsig          radsigerr'
+  mes3=mes+'         <Map>         Mapuncert         <rad>           raduncert'
+  mes4=mes+'        <nobj>      .32/sqrt(nobj)    nobjtot'
+  
+  printf, lun2, mes1
+  forprint, bina, $
+            Maperr, Maperrerr, raderr, raderrerr, $
+            TEXT=5, $  ;; prints to datafile ( I set !textunit = lun2)
+            /silent
+  printf, lun2, mes2
+  forprint, bina, $
+            Mapsig, Mapsigerr, radsig, radsigerr, $
+            TEXT=5, $
+            /silent
+  printf, lun2, mes3
+  forprint, bina, $
+            Map, Mapuncert, rad, raduncert, $
+            TEXT=5, $
+            /silent
+  printf, lun2, mes4
+  forprint, bina, $
+            nobjavg, aMaperr, nobjtot, $
+            TEXT=5, $
+            /silent
+
+  title = 'Runs '+r1str+' and '+r2str+'  '+nnm+' in '+colors[clr]
+  xt='square degrees'
+
+  m = max([ 1.1*max(Maperr), 1.1*max(raderr),1.1*max(Mapsig), 1.1*max(radsig) ])
+
+  ; create postscript file for output
+  makeps, psname, /noland
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Log plots
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  yt=''
+  ploterr, bina, Maperr, Maperrerr, title=title, xtitle=xt, ytitle=yt,psym=1, $
+           /xlog, /ylog
+  oploterr, bina, Mapsig, Mapsigerr, psym=3
+  oplot, bina, aMaperr
+  legend, ['<Maperr>', 'bin2bin spread','.32/sqrt(N)'],psym=[1,3,0],$
+          position=[.6,.06]
+
+  yt=''
+  ploterr, bina, raderr, raderrerr, title=title, xtitle=xt, ytitle=yt,psym=1, $
+           /xlog, /ylog
+  oploterr, bina, radsig, radsigerr, psym=3
+  oplot, bina, araderr
+  legend, ['<raderr>', 'bin2bin spread','.32/sqrt(N)'],psym=[1,3,0],$
+          position=[.6,.06]
+  
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Linear plots
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  yt=''
+  ploterr, bina, Maperr, Maperrerr, title=title, xtitle=xt, ytitle=yt,psym=1, $
+           yrange=[0,m]
+  oploterr, bina, Mapsig, Mapsigerr, psym=3
+  oplot, bina, aMaperr
+  legend, ['<Maperr>', 'bin2bin spread','.32/sqrt(N)'],psym=[1,3,0],$
+          position=[3.,.035]
+
+  yt=''
+  ploterr, bina, raderr, raderrerr, title=title, xtitle=xt, ytitle=yt,psym=1, $
+           yrange=[0,m]
+  oploterr, bina, radsig, radsigerr, psym=3
+  oplot, bina, araderr
+  legend, ['<raderr>', 'bin2bin spread','.32/sqrt(N)'],psym=[1,3,0],$
+          position=[3.,.035]
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Plot of <Map> and <rad> vs binsize
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  yt='<Map>'
+  ploterr, bina, Map, Mapuncert, title=title, xtitle=xt, ytitle=yt,psym=1
+
+  yt='<rad>'
+  ploterr, bina, rad, raduncert, title=title, xtitle=xt, ytitle=yt,psym=1
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Plots of <nobjavg> and nobjtot vs binsize
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  
+  yt='<nobj>'
+  ploterr, bina, nobjavg, nobjavgerr, title=title, ytitle=yt, xtitle=xt,psym=1
+
+  yt = 'Total Objects Used'
+  plot, bina, nobjtot, title=title, ytitle=yt, xtitle=xt,psym=1
+
+  ;close plot
+  ep
+
+  !p.multi=pold
+
+
+  close, lun1
+  free_lun, lun1
+  close, lun2
+  free_lun, lun2
+
+  ptime, systime(1)-tt
+  return 
+END 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

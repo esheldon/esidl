@@ -1,0 +1,263 @@
+<HTML>
+<HEAD><TITLE>pro2html.pro</TITLE></HEAD>
+<BODY bgcolor="black" text="#EED5B7">
+<TT><br></font></TT>
+<TT><font color="#FF4500">;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;</font><br></font></TT>
+<TT><font color="#FF4500">;+</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;NAME:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;PRO2HTML</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;PURPOSE:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;Convert&nbsp;an&nbsp;IDL&nbsp;.pro&nbsp;file&nbsp;into&nbsp;a&nbsp;pretty&nbsp;HTML&nbsp;document,&nbsp;with&nbsp;EMACS-like</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;coding.</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;CALLING&nbsp;SEQUENCE:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;pro2html,&nbsp;pro_file,&nbsp;html_file</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;INPUTS:&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;pro_file:&nbsp;the&nbsp;full&nbsp;path&nbsp;of&nbsp;the&nbsp;IDL&nbsp;.pro&nbsp;file</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;html_file:&nbsp;the&nbsp;full&nbsp;path&nbsp;name&nbsp;of&nbsp;the&nbsp;output&nbsp;html&nbsp;file</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;OPTIONAL&nbsp;INPUTS:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;NONE</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;KEYWORD&nbsp;PARAMETERS:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;NONE</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;OUTPUTS:&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;html&nbsp;file</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;OPTIONAL&nbsp;OUTPUTS:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;NONE</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;CALLED&nbsp;ROUTINES:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;RESERVED_WORDS&nbsp;(in&nbsp;this&nbsp;file)</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;HTML_RESERVED_CHAR&nbsp;(in&nbsp;this&nbsp;file)</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;IS_RESWORD&nbsp;(in&nbsp;this&nbsp;file)</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;IS_HTML_RESCHAR&nbsp;(in&nbsp;this&nbsp;file)</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;DIRSEP&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;NUMLINES</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;DETABIFY</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;PROCEDURE:&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;Look&nbsp;for&nbsp;reserved&nbsp;IDL&nbsp;words,&nbsp;comments,&nbsp;and&nbsp;strings&nbsp;and&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;color-code&nbsp;them.&nbsp;&nbsp;Use&nbsp;DETABIFY.PRO,&nbsp; &amp nbsp&nbsp;and&nbsp; &lt TT &gt &nbsp;in&nbsp;HTML&nbsp;to&nbsp;gaurantee</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;spacing&nbsp;is&nbsp;conserved.&nbsp;Actually&nbsp;I&nbsp;just&nbsp;threw&nbsp;it&nbsp;together,&nbsp;so&nbsp;its</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;pretty&nbsp;dumb&nbsp;but&nbsp;it&nbsp;works.&nbsp;You&nbsp;can&nbsp;change&nbsp;the&nbsp;color&nbsp;coding&nbsp;by&nbsp;changing</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;these&nbsp;definitions:&nbsp;resf&nbsp;(for&nbsp;reserved&nbsp;words)&nbsp;comf&nbsp;(for&nbsp;comments)&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;strf&nbsp;(for&nbsp;strings)&nbsp;aprof&nbsp;(for&nbsp;the&nbsp;procedure&nbsp;name)</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;REVISION&nbsp;HISTORY:</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;Created:&nbsp;18-NOV-2000&nbsp;Erin&nbsp;Scott&nbsp;Sheldon&nbsp;UofMich</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><br></font></TT>
+<TT><font color="#FF4500">;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;</font><br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">FUNCTION</font><font color="#6495ED">&nbsp;reserved_words</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">return</font>,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<font color="#E9967A">'AND'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'BEGIN'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'CASE'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'COMMON'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'DO'</font>,$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ELSE'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ELSE:'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'END'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ENDCASE'</font>,$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ENDELSE'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ENDFOR'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ENDIF'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ENDREP'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ENDWHILE'</font>,$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'EQ'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'FOR'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'FUNCTION'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'GE'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'GOTO'</font>,$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'GT'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'IF'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'INHERITS'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'LE'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'LT'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'MOD'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'NE'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'NOT'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'OF'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'ON_IOERROR'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'OR'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'PRO'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'REPEAT'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'THEN'</font>,$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'UNTIL'</font>,&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'WHILE'</font>,$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#E9967A">'XOR'</font>,<font color="#E9967A">'RETURN'</font>]<br></font></TT>
+<TT><br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">END</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">FUNCTION</font><font color="#6495ED">&nbsp;html_reserved_char</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">return</font>,&nbsp;[&nbsp;[<font color="#E9967A">' &lt '</font>,&nbsp;<font color="#E9967A">'&nbsp; &amp lt&nbsp;'</font>],&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<font color="#E9967A">' &gt '</font>,&nbsp;<font color="#E9967A">'&nbsp; &amp gt&nbsp;'</font>],&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<font color="#E9967A">' &amp '</font>,&nbsp;<font color="#E9967A">'&nbsp; &amp amp&nbsp;'</font>]&nbsp;]<br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">END</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">FUNCTION</font><font color="#6495ED">&nbsp;is_resword</font>,&nbsp;word<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">COMMON</font>&nbsp;reser,&nbsp;reswords,&nbsp;html_reschar<br></font></TT>
+<TT>&nbsp;&nbsp;w=where(reswords&nbsp;<font color="#00FFFF">EQ</font>&nbsp;strupcase(word),&nbsp;nw)<br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;nw&nbsp;<font color="#00FFFF">EQ</font>&nbsp;0&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">return</font>,&nbsp;0&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">return</font>,&nbsp;1<br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">END</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">FUNCTION</font><font color="#6495ED">&nbsp;is_html_reschar</font>,&nbsp;char<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">COMMON</font>&nbsp;reser,&nbsp;reswords,&nbsp;html_reschar<br></font></TT>
+<TT>&nbsp;&nbsp;w=where(html_reschar[0,*]&nbsp;<font color="#00FFFF">EQ</font>&nbsp;char,&nbsp;nw)<br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;nw&nbsp;<font color="#00FFFF">NE</font>&nbsp;0&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">return</font>,&nbsp;html_reschar[1,w[0]]&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">return</font>,char<br></font></TT>
+<TT>&nbsp;&nbsp;<br></font></TT>
+<TT><font color="#00FFFF">END</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT><font color="#00FFFF">PRO</font><font color="#6495ED">&nbsp;pro2html</font>,&nbsp;proname,&nbsp;htmlname,&nbsp;silent=silent<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;n_params()&nbsp;<font color="#00FFFF">LT</font>&nbsp;2&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print,<font color="#E9967A">'-Syntax:&nbsp;pro2html,&nbsp;proname,&nbsp;htmlname,&nbsp;silent=silent'</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">return</font><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">COMMON</font>&nbsp;reser,&nbsp;reswords,&nbsp;html_reschar<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;reswords&nbsp;=&nbsp;reserved_words()<br></font></TT>
+<TT>&nbsp;&nbsp;html_reschar&nbsp;=&nbsp;html_reserved_char()<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;space&nbsp;=&nbsp;<font color="#E9967A">' &amp nbsp;'</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;space&nbsp;=&nbsp;' &amp nbsp; &amp nbsp;'</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;color&nbsp;reserved&nbsp;words&nbsp;cyan&nbsp;1</font><br></font></TT>
+<TT>&nbsp;&nbsp;resf&nbsp;=&nbsp;<font color="#E9967A">' &lt font&nbsp;color="#00FFFF" &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;resb&nbsp;=&nbsp;<font color="#E9967A">' &lt /font &gt '</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;color&nbsp;after&nbsp;PRO&nbsp;statement&nbsp;</font><br></font></TT>
+<TT>&nbsp;&nbsp;aprof&nbsp;=&nbsp;<font color="#E9967A">' &lt font&nbsp;color="#6495ED" &gt '</font><br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;aprof&nbsp;=&nbsp;' &lt font&nbsp;color="#00B2EE" &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;aprob&nbsp;=&nbsp;<font color="#E9967A">' &lt /font &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;color&nbsp;comments&nbsp;firebrick&nbsp;1</font><br></font></TT>
+<TT>&nbsp;&nbsp;comm&nbsp;=&nbsp;<font color="#E9967A">';'</font><br></font></TT>
+<TT>&nbsp;&nbsp;comf&nbsp;=&nbsp;<font color="#E9967A">' &lt font&nbsp;color="#FF4500" &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;comb&nbsp;=&nbsp;<font color="#E9967A">' &lt /font &gt '</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;color&nbsp;strings&nbsp;dark&nbsp;salmon</font><br></font></TT>
+<TT>&nbsp;&nbsp;str1&nbsp;=&nbsp;<font color="#E9967A">"'"</font><br></font></TT>
+<TT>&nbsp;&nbsp;str2&nbsp;=&nbsp;<font color="#E9967A">'"'</font><br></font></TT>
+<TT>&nbsp;&nbsp;strf&nbsp;=&nbsp;<font color="#E9967A">' &lt font&nbsp;color="#E9967A" &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;strb&nbsp;=&nbsp;<font color="#E9967A">' &lt /font &gt '</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;<font color="#00FFFF">NOT</font>&nbsp;keyword_set(silent)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print,<font color="#E9967A">'proname&nbsp;=&nbsp;'</font>,proname<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print,<font color="#E9967A">'htmlname&nbsp;=&nbsp;'</font>,htmlname<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print<br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;openr,&nbsp;inlun,&nbsp;proname,&nbsp;/get_lun<br></font></TT>
+<TT>&nbsp;&nbsp;openw,&nbsp;outlun,&nbsp;htmlname,&nbsp;/get_lun<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;dirsep,&nbsp;proname,&nbsp;dir,&nbsp;proc<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;printf,&nbsp;outlun,&nbsp;<font color="#E9967A">' &lt HTML &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;printf,&nbsp;outlun,&nbsp;<font color="#E9967A">' &lt HEAD &gt  &lt TITLE &gt '</font>+proc+<font color="#E9967A">' &lt /TITLE &gt  &lt /HEAD &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;printf,&nbsp;outlun,&nbsp;<font color="#E9967A">' &lt BODY&nbsp;bgcolor="black"&nbsp;text="#EED5B7" &gt '</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;nl=numlines(proname)<br></font></TT>
+<TT>&nbsp;&nbsp;string=<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">FOR</font>&nbsp;i=0L,&nbsp;nl-1&nbsp;<font color="#00FFFF">DO</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string=<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readf,&nbsp;inlun,&nbsp;string<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string=detabify(string)<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;length&nbsp;=&nbsp;strlen(string)<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line&nbsp;=&nbsp;<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j=0L<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;on&nbsp;the&nbsp;line&nbsp;level</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;afterpro&nbsp;=&nbsp;0<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;iscomment&nbsp;=&nbsp;0<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;didcomment&nbsp;=&nbsp;0<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isstring&nbsp;=&nbsp;0<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;oldstr&nbsp;=&nbsp;<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">WHILE</font>&nbsp;j&nbsp;<font color="#00FFFF">LE</font>&nbsp;length-1&nbsp;<font color="#00FFFF">DO</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;on&nbsp;the&nbsp;word&nbsp;level</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;word&nbsp;=&nbsp;<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmp=<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">REPEAT</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;word&nbsp;=&nbsp;word&nbsp;+&nbsp;tmp<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wupcase&nbsp;=&nbsp;strupcase(word)<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;(wupcase&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">'GOTO,'</font>)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;word=resf+<font color="#E9967A">'GOTO'</font>+resb+<font color="#E9967A">','</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;(wupcase&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">'RETURN,'</font>)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;word=resf+<font color="#E9967A">'return'</font>+resb+<font color="#E9967A">','</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmp&nbsp;=&nbsp;strmid(string,j,1)<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;afterpro&nbsp;<font color="#00FFFF">AND</font>&nbsp;tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">','</font>&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmp&nbsp;=&nbsp;aprob+tmp<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;afterpro=0<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">IF</font>&nbsp;(tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;comm)&nbsp;<font color="#00FFFF">AND</font>&nbsp;(NOT&nbsp;isstring)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#FF4500">;tmp&nbsp;=&nbsp;tmp+'&nbsp;'</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;iscomment&nbsp;=&nbsp;1&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;<font color="#00FFFF">NOT</font>&nbsp;didcomment&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmp&nbsp;=&nbsp;comf+tmp<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;didcomment=1<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">IF</font>&nbsp;(&nbsp;(tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;str1)&nbsp;<font color="#00FFFF">OR</font>&nbsp;(tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;str2)&nbsp;)&nbsp;<font color="#00FFFF">AND</font>&nbsp;(NOT&nbsp;iscomment)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;isstring&nbsp;<font color="#00FFFF">AND</font>&nbsp;(tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;oldstr)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isstring&nbsp;=&nbsp;0&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;oldstr=<font color="#E9967A">''</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmp&nbsp;=&nbsp;tmp+strb<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">IF</font>&nbsp;<font color="#00FFFF">NOT</font>&nbsp;isstring&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;isstring&nbsp;=&nbsp;1<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;oldstr=tmp<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmp&nbsp;=&nbsp;strf+tmp<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;tmp&nbsp;=&nbsp;is_html_reschar(tmp)<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j=j+1<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDREP</font>&nbsp;<font color="#00FFFF">UNTIL</font>&nbsp;(&nbsp;(tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">'&nbsp;'</font>)&nbsp;<font color="#00FFFF">OR</font>&nbsp;(j&nbsp;<font color="#00FFFF">GE</font>&nbsp;length+1)&nbsp;)<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;iscomment&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;do&nbsp;nothing</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">IF</font>&nbsp;isstring&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#FF4500">;;&nbsp;do&nbsp;nothing</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">IF</font>&nbsp;afterpro&nbsp;<font color="#00FFFF">AND</font>&nbsp;(tmp&nbsp;<font color="#00FFFF">NE</font>&nbsp;<font color="#E9967A">'&nbsp;'</font>)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font>&nbsp;<br></font></TT>
+<TT><font color="#FF4500">;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;word&nbsp;=&nbsp;aprof&nbsp;+&nbsp;word&nbsp;+&nbsp;aprob</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;word&nbsp;=&nbsp;word&nbsp;+&nbsp;aprob<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;afterpro&nbsp;=&nbsp;0<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;<font color="#00FFFF">IF</font>&nbsp;is_resword(word)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;<font color="#00FFFF">BEGIN</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;(strupcase(word)&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">'PRO'</font>)&nbsp;<font color="#00FFFF">OR</font>&nbsp;(strupcase(word)&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">'FUNCTION'</font>)&nbsp;<font color="#00FFFF">THEN</font>&nbsp;afterpro&nbsp;=&nbsp;1<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;afterpro&nbsp;<font color="#00FFFF">THEN</font>&nbsp;word&nbsp;=&nbsp;resf+word+resb+aprof&nbsp;$<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ELSE</font>&nbsp;word&nbsp;=&nbsp;resf+word+resb<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDIF</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line&nbsp;=&nbsp;line&nbsp;+&nbsp;word<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;tmp&nbsp;<font color="#00FFFF">EQ</font>&nbsp;<font color="#E9967A">'&nbsp;'</font>&nbsp;<font color="#00FFFF">THEN</font>&nbsp;line&nbsp;=&nbsp;line&nbsp;+&nbsp;space<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">ENDWHILE</font>&nbsp;<br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#00FFFF">IF</font>&nbsp;iscomment&nbsp;<font color="#00FFFF">THEN</font>&nbsp;line&nbsp;=&nbsp;line&nbsp;+&nbsp;comb<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line=<font color="#E9967A">' &lt TT &gt '</font>+line+<font color="#E9967A">' &lt br &gt  &lt /font &gt  &lt /TT &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf,outlun,line<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">ENDFOR</font>&nbsp;<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;printf,&nbsp;outlun,&nbsp;<font color="#E9967A">' &lt /BODY &gt '</font><br></font></TT>
+<TT>&nbsp;&nbsp;printf,&nbsp;outlun,&nbsp;<font color="#E9967A">' &lt /HTML &gt '</font><br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;free_lun,&nbsp;inlun<br></font></TT>
+<TT>&nbsp;&nbsp;free_lun,&nbsp;outlun<br></font></TT>
+<TT><br></font></TT>
+<TT>&nbsp;&nbsp;<font color="#00FFFF">return</font><br></font></TT>
+<TT><font color="#00FFFF">END</font>&nbsp;<br></font></TT>
+</BODY>
+</HTML>

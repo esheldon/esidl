@@ -1,0 +1,2 @@
+The gmcf plotters actually plot deltasig.  The calc_xi_from_deltasig does
+the inversion, and the xi plotters plot them.

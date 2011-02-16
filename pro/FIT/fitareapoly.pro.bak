@@ -1,0 +1,78 @@
+; This is specifically designed for the area fraction stuff
+; for maxbcg galaxy counts
+
+function fit2gauss, x, y, error=error, $
+                      yfit=yfit, sigma=sigma, $
+                      silent=silent
+
+
+    if n_params() lt 3 then begin 
+        on_error, 2
+        print,'-Syntax: parms = fit2gauss(x, y, error=, yfit=, sigma=, /silent)'
+        print,''
+        message,'Halting'
+    endif 
+
+    nx = n_elements(x)
+    ny = n_elements(y)
+    if ny ne nx then begin
+        print,'X and Y must be same size'
+        on_error, 2
+        message,'Halting'
+    endif 
+
+    if n_elements(error) eq 0 then error = replicate(1d, nx)
+    w=where(error EQ 0., nw)
+    if nw ne 0 then begin
+        print,'Errors must be non-zero'
+        on_error, 2
+        message,'Halting'
+    endif 
+
+    ; Make a guess at the centroids and normalizations
+    ; For centroids, split data in half and take means on
+    ; each side
+    medx = median(x)
+    wlow=where(x lt medx, nlow, comp=whigh, ncomp=nhigh)
+    if nlow eq 0 or nhigh eq 0 then begin
+        on_error, 2
+        message,'Not enough points'
+    endif
+
+    mean1guess = median(x[wlow])
+    mean2guess = median(x[whigh])
+
+    ; Sigmas
+    sig1guess = sdev(x[wlow])
+    sig2guess = sdev(x[whigh])
+
+    ; For Normalizations take half of the max
+    norm1guess = max(y[wlow])/2
+    norm2guess = max(y[high])/2
+
+
+  itmax = 300
+  MYFUNCT = 'areapoly'
+  a = MPFITFUN(MYFUNCT, x, y, error, aguess, $
+               AUTODERIVATIVE=1, MAXITER=itmax, niter=iter, $
+               yfit=yfit, perror=sigma, covar=covar,/quiet,/double)
+
+  if not keyword_set(silent) then begin 
+
+      chi2 = total( ( (y-yfit)/error )^2, /double)
+      dof = n_elements(y)-2
+      chi2per = chi2/dof
+      print
+      print,'--------------------------------------------------------'
+      print,'best fit: '
+      for i=0,degree-1 do begin 
+          print,'  a['+ntostr(i)+'] = '+ntostr(a[i])+' '+!plusminus+' '+ntostr(sigma[i])
+      endfor 
+      print,'iterations = ',iter
+      print,'chi^2/dof  = ',ntostr(chi2)+'/'+ntostr(dof)+' = '+ntostr(chi2per)
+  endif 
+
+
+
+  return, a
+end 

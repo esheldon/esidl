@@ -1,0 +1,23 @@
+#!/bin/sh
+
+osname=`uname`
+
+echo "Configuring for OS: \"${osname}\""
+
+case $osname in
+    "Linux")
+        M_CFLAGS="-Wall -fPIC"
+        M_LDFLAGS="-shared"
+    ;;
+    "Darwin")
+        M_CFLAGS="-Wall -dynamic"
+        # Is this intel only?
+        M_LDFLAGS="-bundle -L/usr/lib -lc -flat_namespace -undefined suppress"
+        ;;
+    *) 
+        echo "Unsupported OS: ${osname}"
+        exit 45;;
+esac
+
+echo "M_CFLAGS=${M_CFLAGS}" > make.conf
+echo "M_LDFLAGS=${M_LDFLAGS}" >> make.conf

@@ -1,0 +1,33 @@
+* First make adatc files
+
+   make_multi_corrscripts_byrun (run...)
+	|-> make_corrscripts53
+		|->creates rotation script
+			   make_corrected_files53 script
+			   corrtest script
+
+* Source Catalogs
+
+       make_scat53_meane
+       combine_stripe
+       combine_stripes
+
+* Lens Catalogs:
+
+       make_spec_index
+       collate_spec_index
+       make_stripe_index (make sure up-to-date steves_runlist.par)
+       run_combine_stripe_index
+
+  -Then to find which are missing imaging runs
+       missing_spectro_runs
+
+* n(z) and inverse critical density
+
+       make_nz_photoz (or run_make...)
+       calc_sdss_sigma_crit_photoz (or run_..)
+       generate_meanscinv
+
+  -Then to get the files
+       get_nz_photoz
+       get_sigmacrit_photoz

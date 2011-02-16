@@ -1,0 +1,323 @@
+PRO simkappa_map, zlens=zlens, zsource=zsource, sigma=sigma, $
+                  sdec=sdec, sra=sra, $
+                  rmax=rmax, slength=slength, gridsize=gridsize, $
+                  nx=nx, ny=ny, $
+                  addnoise=addnoise,$
+                  check = check, $
+                  write=write, rotate=rotate,noprompt=noprompt,_extra=e
+
+  IF n_params() EQ 0 THEN BEGIN
+      print,'-Syntax: '
+      return
+  ENDIF 
+
+  time=systime(1)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Some Parameters
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+  COMMON seed,seed
+  check = 0
+
+  IF NOT keyword_set(write) THEN write=0
+  IF NOT keyword_set(noprompt) THEN noprompt=0
+  IF NOT keyword_set(addnoise) THEN addnoise=0
+
+  IF n_elments(zlens) EQ 0 THEN zlens = .15
+  IF n_elements(zsource) EQ 0 THEN zsource = .4
+  IF n_elements(sigma) EQ 0 THEN sigma = 1000.
+  IF n_elements(sdec) EQ 0 THEN sdec = 1.         ;degrees
+  IF n_elements(sra) EQ 0 THEN sra = 1.           ;degrees
+  IF n_elements(gridsize) EQ 0 THEN gridsize=400. ;arcsec
+  IF n_elements(rmax) EQ 0 THEN rmax = 600.       ;arcsec
+  IF n_elements(slength) EQ 0 THEN slength = 300. ;arcsec
+
+  tx = n_elements(nx)
+  ty = n_elements(ny)
+  IF tx EQ 0 AND ty EQ 0 THEN BEGIN
+      nx = 60 && ny = 60
+  ENDIF ELSE BEGIN
+      IF tx EQ 0 AND ty NE 0 THEN nx=ny
+      IF tx NE 0 AND ty EQ 0 THEN ny=nx
+  ENDELSE 
+
+
+  ;; convert to degrees
+  s = slength/3600.
+  radmax = rmax/3600.
+  gsize = gridsize/3600.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Set up the output files
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  zstr = ntostr(clust.z,4)
+  zdist = angdist_lambda(clust.z) ;in Mpc
+  zdist = zdist*1000.             ;kpc
+
+  IF write THEN BEGIN 
+      outdir = '/sdss4/data1/esheldon/GRIDSHEAR/KAPPA/'
+      prename=outdir+$
+              'sim' + '_S' +ntostr(long(slength)) + $
+              '_Z' + zstr + 'Sig' + ntostr(simga)
+
+      add1 = '_1.ps'
+      add2 = '_1.fit'
+      psfile = prename+add1
+      rtfile = prename+'_rot'+add1
+      kapfit = prename+'_kappa'+add2
+      radfit = prename+'_rad'+add2
+      WHILE exist(psfile) DO BEGIN
+          add1=newname(add1)
+          add2=newname(add2)
+          psfile = prename+add1
+          rtfile = prename+'_rot'+add1
+          kapfit = prename+'_kappa'+add2
+          radfit = prename+'_rad'+add2
+      ENDWHILE 
+      print,'Postscript file: ',psfile
+  ENDIF 
+  IF NOT keyword_set(rotate) THEN rotate=0
+  IF noprompt THEN rotate=0
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Create the background catalog
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  IF addnoise THEN BEGIN
+      print
+      print,'Adding Noise'
+      addstring = addstring+' (Noise)'
+  ENDIF
+
+  sis_shear, zlens, zsource, sigma, sdec, sra, scat, cen, $
+    density=density, noise=noise
+
+  cenx = cen[0]
+  ceny = cen[1]
+
+  xmax  = cenx + gsize/2.
+  xmin  = cenx - gsize/2.
+  ymax  = ceny + gsize/2.
+  ymin  = ceny - gsize/2.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Define the grid
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  gridx = arrscl( findgen(nx), xmin, xmax )
+  gridy = arrscl( findgen(ny), ymin, ymax )
+
+  print
+  print,' Cluster Redshift~ ',zstr,'  Distance: ',ntostr(zdist/10.),' Mpc'
+  print
+  print,' BCG   DEC: ',ntostr(cenx),'  RA: ',ntostr(ceny)
+  print,' grid center: ',median(gridx), median(gridy)
+  print,' grid xrange: ',min(gridx),max(gridx)
+  print,' grid yrange:    ',min(gridy),max(gridy)
+  print
+  print,' grid size: ', gridsize
+  print,' grid spacing: ',abs( gridx[1]-gridx[0] )*3600.
+  print,' nx: ',ntostr(nx)
+  print,' ny: ',ntostr(ny)
+  print,' rmax: ',rmax
+  print,' Smoothing length:  ',ntostr(slength)
+  print,' Weight Max:  ', ntostr(slength*1.8938227)
+  print
+    
+  addstring = '  Z='+zstr+'  '+' s='+ntostr(long(slength))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Select nearby background galaxies and look at their distribution.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  IF max(scat.ra)  LT ymax+radmax OR min(scat.ra)  GT ymin-radmax OR $
+     max(scat.dec) LT xmax+radmax OR min(scat.dec) GT xmin-radmax  THEN BEGIN
+      
+      print,'Cannot accomodate this grid'
+      check = 1
+      return
+  ENDIF 
+  w1 = where(scat.ra GT ymin-radmax AND scat.ra LT ymax+radmax, nw1)
+  w2 = where(scat[w1].dec GT xmin-radmax AND scat[w1].dec LT xmax+radmax, nw)
+  w=w1[w2]
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Calculate the tangential shear around each of the grid points
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;; Calculate the signal.
+  gridkappa, scat[w].e1, scat[w].e2, scat[w].uncert, $
+             scat[w].dec, scat[w].ra, $
+             gridx, gridy, radmax, s, $
+             kappa, radial, npair
+
+  ;; Calculate the noise.  Randomize.
+  IF n_elements(noise) EQ 0 THEN BEGIN
+      print
+      print,'Finding the noise'
+ 
+      a=randomu(seed, nw)
+      new_w1=w[ sort(a) ]
+      a=randomu(seed, nw)
+      new_w2=w[ sort(a) ]
+      gridkappa, scat[w].e1, scat[w].e2, scat[w].uncert, $
+                 scat[new_w1].dec, scat[new_w2].ra, $
+                 gridx, gridy, radmax, s, $
+                 randkappa, randradial, randnpair
+
+      noise = sqrt( variance(randkappa) )
+
+      plotnoise=1
+  ENDIF ELSE plotnoise=0
+  print
+  print,'Noise = ',ntostr(noise)
+  print
+  addstring = addstring+' Noise: '+ntostr(noise,6)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Make some more outputs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ptime,systime(1)-time
+  
+  IF write THEN BEGIN 
+      writefits, kapfit, kappa
+      writefits, radfit, radial
+  ENDIF 
+
+
+  IF write THEN begplot,name=psfile
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Plot density maps
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+  ;; Define grid and axis labels.
+  usex = (gridx - cenx)*3600.
+  usey = (gridy - ceny)*3600.
+
+  ntick=5
+  
+  xangle=strarr(ntick)
+  xdist = xangle
+
+  minx=min(gridx)
+  maxx=max(gridx)
+  stepx = (maxx-minx)/(ntick-1)
+  FOR i=0, ntick-1 DO BEGIN
+      xangle[i]=ntostr( (minx + i*stepx-cenx)*3600., 6)
+      xdist[i] =ntostr( (minx + i*stepx-cenx)*!pi/180.*zdist, 6)
+  ENDFOR 
+
+  yangle=strarr(ntick)
+  ydist = yangle
+
+  miny=min(gridy)
+  maxy=max(gridy)
+  stepy=(maxy-miny)/(ntick-1)
+  FOR i=0, ntick-1 DO BEGIN
+      yangle[i]=ntostr( ( miny + i*stepy -ceny)*3600., 6)
+      ydist[i] =ntostr( (miny + i*stepy-ceny)*!pi/180.*zdist, 6)
+  ENDFOR 
+
+  ;; Contour levels (sigma levels)
+  levels = [-5.5, -5, -4.5, -4., -3.5, -3., -2.5, -2., -1.5, -1., -.5, $
+            .5, 1., 1.5, 2., 2.5, 3., 3.5, 4., 4.5, 5., 5.5]
+;  levels = [-6.,-5.,-4.,-3.,-2.,-1.,1.,2.,3.,4.,5.,6.]
+  c_labels=levels*0. + 1.
+  c_linestyle = (levels LT 0.)
+  c_colors = c_linestyle
+  c_colors = c_colors*(!d.n_colors-1)
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Make the plots
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  
+  style=4+1                     ; This uses exact axis sizes and also
+                                ; suppresses the axes
+
+  IF NOT write  AND NOT noprompt THEN key=get_kbrd(1)
+  tvim3, kappa, /noframe, position=position, _extra=e
+
+  axis, xaxis=1, xticks=ntick-1, xtickn=xangle, xtitle='Density'+addstring
+  axis, xaxis=0, xticks=ntick-1, xtickn=xdist,  xtitle='kpc'
+  axis, yaxis=1, yticks=ntick-1, ytickn=yangle, ytitle='arcsec'
+  axis, yaxis=0, yticks=ntick-1, ytickn=ydist,  ytitle='kpc'
+  contour, kappa/noise, /noerase, position=position, $
+           levels=levels, $
+           c_linestyle=c_linestyle, c_labels=c_labels, c_colors=c_colors, $
+           xstyle=style, ystyle=style
+
+;  IF NOT write AND NOT noprompt THEN key=get_kbrd(1)
+;  surface, kappa, usex, usey, $
+;    title='Kappa'+addstring,charsize=2., _extra=e
+
+  IF NOT write  AND NOT noprompt THEN key=get_kbrd(1)
+  tvim3, radial, /noframe, position=position,_extra=e
+  axis, xaxis=1, xticks=ntick-1, xtickn=xangle, xtitle='Radial'+addstring
+  axis, xaxis=0, xticks=ntick-1, xtickn=xdist,  xtitle='kpc'
+  axis, yaxis=1, yticks=ntick-1, ytickn=yangle, ytitle='arcsec'
+  axis, yaxis=0, yticks=ntick-1, ytickn=ydist,  ytitle='kpc'
+
+  contour, radial/noise, /noerase, position=position,$
+           levels=levels, $
+           c_linestyle=c_linestyle, c_labels=c_labels, c_colors=c_colors, $
+           xstyle=style, ystyle=style
+
+;  IF NOT write  AND NOT noprompt THEN key=get_kbrd(1)
+;  surface, radial, usex, usey, title='Radial'+addstring, charsize=2., $
+;    _extra=e
+
+  IF plotnoise THEN BEGIN 
+      IF NOT write  AND NOT noprompt THEN key=get_kbrd(1)
+      tvim3, randkappa, /noframe, position=position, _extra=e
+      axis, xaxis=1, xticks=ntick-1, xtickn=xangle, xtitle='Randomized'+addstring
+      axis, xaxis=0, xticks=ntick-1, xtickn=xdist,  xtitle='kpc'
+      axis, yaxis=1, yticks=ntick-1, ytickn=yangle, ytitle='arcsec'
+      axis, yaxis=0, yticks=ntick-1, ytickn=ydist,  ytitle='kpc'
+
+      contour, randkappa/noise, /noerase, position=position,$
+        levels=levels, $
+        c_linestyle=c_linestyle, c_labels=c_labels, c_colors=c_colors,$
+        xstyle=style, ystyle=style
+  ENDIF 
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; Plot source gal distribution, annis' clusters and position of our cluster
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  IF NOT write  AND NOT noprompt THEN key=get_kbrd(1)
+  print
+  print,ntostr(nw),' Background galaxies found in ', $
+        ntostr( 2*rmax+gridsize ),' arcsecond box'
+  plot, scat[w].ra, scat[w].dec, psym=3, ystyle=1, xstyle=1, $
+        yrange=[xmin-radmax,xmax+radmax],xrange=[ymin-radmax,ymax+radmax],$
+        position=position
+  plot_box, ymin,ymax,xmin,xmax
+  oplot, [ceny], [cenx], psym=4, symsize=2.
+
+  IF NOT write  AND NOT noprompt THEN key=get_kbrd(1)
+  rdannis, /silent
+  oplot, [clust.ra], [clust.dec], psym=6, symsize=2 
+
+  IF write THEN endplot,/noprint
+
+  IF rotate THEN BEGIN 
+      IF write THEN BEGIN 
+          rotate_plot, kappa, usex, usey, step=5., $
+            title='Kappa'+addstring,psfile=rtfile,charsize=2., $
+            _extra=e
+      ENDIF ELSE BEGIN 
+          key=get_kbrd(1)
+          rotate_plot, kappa, usex, usey, step=5., $
+            title='Kappa'+addstring,charsize=2., _extra=e
+      ENDELSE 
+  ENDIF 
+
+  return
+END 

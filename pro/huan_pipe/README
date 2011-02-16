@@ -1,0 +1,11 @@
+Trying to migrate over to OO approach. The class files
+
+goods_addnoise__define.pro
+and
+huan_goods__define.pro
+
+incorporate some of the other code. Some important stand-alone
+codes:
+
+huan_goods_admom.pro
+huan_goods_sensitivity_convolved.pro

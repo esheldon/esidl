@@ -1,0 +1,103 @@
+<HTML>
+<HEAD>
+<TITLE>Flag Help</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Flag Meanings</H1>
+
+
+
+<H2>OBJECT1_FLAGS</h2>
+The object1_flags apply to individual bandpasses.  Your flag structure will
+only refer to them by the name: object1_edge -> edge  These flags can also be
+addressed to the object as a whole with the objc_flags
+<pre>
+  OBJECT1_CANONICAL_CENTER =    0x1, /* used canonical, not local, centre   */
+  OBJECT1_BRIGHT       =        0x2, /* detected by Bright Objects	    */
+  OBJECT1_EDGE         =        0x4, /* object is too close to edge of frame*/
+  OBJECT1_BLENDED      =        0x8, /* object is/was blended		    */
+  OBJECT1_CHILD        =       0x10, /* object is a child		    */
+  OBJECT1_PEAKCENTER   =       0x20, /* given centre position of peak pixel */
+  OBJECT1_NODEBLEND    =       0x40, /* no deblending attempted	            */
+  OBJECT1_NOPROFILE    =       0x80, /* too small to estimate a profile     */
+  OBJECT1_NOPETRO      =      0x100, /* no Petrosian radius		    */
+  OBJECT1_MANYPETRO    =      0x200, /* more than one Petrosian radius      */
+  OBJECT1_NOPETRO_BIG  =      0x400, /* no Petrosian radius as object is too big */
+  OBJECT1_DEBLEND_TOO_MANY_PEAKS = 0x800, /* too many peaks to deblend      */
+  OBJECT1_CR     	=     0x1000, /* contains a CR pixel                */
+  OBJECT1_MANYR50      =     0x2000, /* more than one 50% radius	    */
+  OBJECT1_MANYR90      =     0x4000, /* more than one 90% radius	    */
+  OBJECT1_BAD_RADIAL   =     0x8000, /* some low S/N radial points	    */
+  OBJECT1_INCOMPLETE_PROFILE = 0x10000, /* r_P includes off-frame pixels    */
+  OBJECT1_INTERP       =    0x20000, /* object contains interpolated pixels */
+  OBJECT1_SATUR        =    0x40000, /* object contains saturated pixels    */
+  OBJECT1_NOTCHECKED   =    0x80000, /* object contains NOTCHECKED pixels   */
+  OBJECT1_SUBTRACTED   =   0x100000, /* object had wings subtracted	    */
+  OBJECT1_NOSTOKES     =   0x200000, /* object has no measured stokes params*/
+  OBJECT1_BADSKY       =   0x400000, /* sky level so bad that object is -ve */
+  OBJECT1_PETROFAINT   =   0x800000, /* >= 1 Petrosian radius too faint     */
+  OBJECT1_TOO_LARGE    =  0x1000000, /* object is too large		    */
+  OBJECT1_DEBLENDED_AS_PSF = 0x2000000, /* deblender treated obj as PSF     */
+  OBJECT1_DEBLEND_PRUNED = 0x4000000, /* deblender pruned peak list	    */
+  OBJECT1_ELLIPFAINT   = 0x8000000, /* Centre's fainter than desired elliptical isophote */
+  OBJECT1_BINNED1      = 0x10000000, /* object was found in 1x1 binned image*/
+  OBJECT1_BINNED2      = 0x20000000, /* object was found in 2x2 binned image*/
+  OBJECT1_BINNED4      = 0x40000000, /* object was found in 4x4 binned image*/
+  OBJECT1_MOVED        = 0x80000000  /* Object appears to have moved during */
+                                     /* the exposure.  May have been        */
+                                     /* deblended as a moving object.       */
+</pre>
+
+<H2>OBJECT2_FLAGS</h2>
+More flags..
+<pre>
+  OBJECT2_DEBLENDED_AS_MOVING= 0x1, /* deblended as a moving object        */
+  OBJECT2_NODEBLEND_MOVING   = 0x2, /* no deblend of moving object         */
+  OBJECT2_TOO_FEW_DETECTIONS = 0x4, /* too few detections to deblend       */
+  OBJECT2_BAD_MOVING_FIT     = 0x8, /* Fit to moving object was too poor   */
+  OBJECT2_STATIONARY        = 0x10, /* velocity is consistent with zero    */
+  OBJECT2_PEAKS_TOO_CLOSE   = 0x20, /* at least some peaks were too close, */
+                                    /* and thus merged                     */
+  OBJECT2_MEDIAN_CENTRE     = 0x40, /* centre is of median-smoothed image  */
+  OBJECT2_LOCAL_EDGE        = 0x80, /* per-band centre's too near edge     */
+  OBJECT2_BAD_COUNTS_ERROR = 0x100, /* psf|fiberCountsErr is bad/unknown   */
+  OBJECT2_BAD_MOVING_FIT_CHILD = 0x200, /* moving child's fit was too poor */
+  OBJECT2_DEBLEND_UNASSIGNED_FLUX = 0x400, /* deblender failed to assign   */
+                                           /* enough of flux to children   */
+  OBJECT2_SATUR_CENTER     = 0x800, /* object's centre's saturated         */
+  OBJECT2_INTERP_CENTER   = 0x1000, /* object's centre is very close to at */
+                                    /* least one interpolated pixel        */
+  OBJECT2_DEBLENDED_AT_EDGE=0x2000, /* object is deblended though EDGE     */
+  OBJECT2_DEBLEND_NOPEAK   =0x4000, /* object had no detected peak         */
+  OBJECT2_PSF_FLUX_INTERP  =0x8000, /* a signifcant amount of PSF's flux   */
+                                    /* is interpolated                     */
+  OBJECT2_TOO_FEW_GOOD_DETECTIONS=0x10000, /* too few good detections to   */
+                                           /* deblend as moving            */
+  OBJECT2_MEASURED    = 0x10000000, /* object has been measured            */
+  OBJECT2_GROWN_MERGED= 0x20000000, /* growing led to a merger             */
+  OBJECT2_HAS_CENTER  = 0x40000000, /* OBJC has a canonical centre         */
+  OBJECT2_MEASURE_BRIGHT = 0x80000000 /* object should be measured bright  */
+</pre>
+
+
+<H2>OBJ_TYPE</h2>
+There is one HDU of this type, enumerating the legal values for the
+"type" field in the object HDU.  The legal values are:
+<pre>
+  OBJ_TYPE_UNK,         /* Unknown	*/
+  OBJ_TYPE_CR,          /* Cosmic ray	*/
+  OBJ_TYPE_DEFECT,      /* Defect	*/
+  OBJ_TYPE_GALAXY,      /* Galaxy	*/
+  OBJ_TYPE_GHOST,       /* Ghost	*/
+  OBJ_TYPE_KNOWNOBJ,    /* Known object	*/
+  OBJ_TYPE_STAR,        /* Star		*/
+  OBJ_TYPE_TRAIL,       /* Star trail	*/
+  OBJ_TYPE_SKY,         /* Sky		*/
+  OBJ_TYPE_NTYPE        /* ???		*/
+</pre>
+
+</BODY>
+
+</HTML>

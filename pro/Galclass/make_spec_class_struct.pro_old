@@ -1,0 +1,68 @@
+PRO make_spec_class_struct,struct,name
+
+  IF n_params() EQ 0 THEN BEGIN 
+      print,'syntax - make_class_struct,struct,name'
+      return
+  END
+
+  str1 = create_struct($
+                       'run',             0L,         $
+                       'rerun',           0,         $
+                       'camcol',          0,         $
+                       'field',           0,         $
+                       'id',              0L,         $
+                       'PARENT',          0l,        $
+                       'NCHILD',          0l,        $
+                       'OBJC_TYPE',       0l,        $
+                       'TYPE',            lonarr(5), $ 
+                       'FLAGS',           lonarr(5), $
+                       'FLAGS2',          lonarr(5), $
+                       'OBJC_FLAGS',      0l,        $
+                       'OBJC_FLAGS2',     0l,        $
+                       'OBJC_ROWC',       0.0,       $
+                       'OBJC_COLC',       0.0,       $
+                       'ROWC',            fltarr(5), $
+                       'COLC',            fltarr(5), $
+                       'COUNTS_MODEL',    fltarr(5), $
+                       'COUNTS_MODELERR', fltarr(5), $
+                       'PETROCOUNTS',     fltarr(5), $
+                       'PETROCOUNTSERR',  fltarr(5), $
+                       'PETRORAD',        fltarr(5), $
+                       'PETRORADERR',     fltarr(5), $
+                       'PETROR50',        fltarr(5), $
+                       'PETROR50ERR',     fltarr(5), $
+                       'PETROR90',        fltarr(5), $
+                       'PETROR90ERR',     fltarr(5), $
+                       'STATUS',          0L)
+  str2 = create_struct($
+                        'RA',              0d,        $
+                        'DEC',             0d,        $
+                        'PRIMTARGET',      0l,        $
+                        'SECTARGET',       0l,        $
+                        'REDDENING',       fltarr(5), $
+                        'SEEING',          fltarr(5), $
+                        'E_D_BIT',         0b,        $
+                        'IXX',             fltarr(5), $
+                        'IXY',             fltarr(5), $
+                        'IYY',             fltarr(5), $
+                        'E1',              replicate(1.e10,5), $
+                        'E2',              replicate(1.e10,5), $
+                        'rotbit',          0b,        $
+                        'momerr',          fltarr(5), $
+                        'r',               fltarr(5), $
+                        'asymmetry',       0.0,       $
+                        'classification',  0,         $
+                        'class',           0.0,       $
+                        'plateid',         -1,         $
+                        'fiberid',         -1,         $
+                        'z1d',             -1.0,       $
+                        'z1d_error',       0.0,       $
+                        'kcorr',           fltarr(5), $
+                        'absmag',          fltarr(5), $
+                        'lum',             fltarr(5), $
+                        'rotation',       fltarr(5), $
+                        'voronoi_dens', 0.0)
+  combine_structs,str1,str2,struct,structyp=name
+
+ return
+END
