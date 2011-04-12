@@ -273,15 +273,15 @@ END
 
 
 pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
-                    indir=indir, outdir=outdir, status=status, $
-					pgsql=pgsql
+                    debug=debug, $
+                    indir=indir, outdir=outdir, status=status
 
     ;; status is 1 unless we reach end
     status=1
 
     if n_params() lt 1 then begin 
         on_error, 2
-        print,'-Syntax: obj->calcrot_eq, run, rerun=, status=, indir=, outdir=,/pgsql,status='
+        print,'-Syntax: obj->calcrot_eq, run, rerun=, status=, indir=, outdir=,status='
         message,'Halting'
     endif 
 
@@ -291,13 +291,11 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
 
     if n_elements(rerun) eq 0 then rerun=301
 
-
     if n_elements(outdir) eq 0 then begin 
         outdir = self->dir('eq')
     endif 
 
     outfile = self->file('eq', run,rerun=rerun, dir=outdir)
-    pgsql_file = self->file('eq', run,rerun=rerun,/postgres, dir=outdir)
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; astrometry structure
@@ -306,9 +304,9 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
     radeg = 180./!dpi
     val = .4d/3600.
     astr={cd: double(identity(2)),$
-        cdelt: [val,val], $
-        crpix: dblarr(2), $
-        crval: [0., 0.]}
+          cdelt: [val,val], $
+          crpix: dblarr(2), $
+          crval: [0., 0.]}
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;; define set of pixels to rotate
@@ -329,13 +327,6 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
         horz[1,i] = crow          ;rows
     ENDFOR 
 
-    ; this is worse?
-    ;vert[0,*] = ccol; columns
-    ;vert[1,*] = arrscl(findgen(nnr), crow, lrow) ; rows
-
-    ;horz[0,*] = arrscl(findgen(nnr), ccol, lcol) ; columns
-    ;horz[1,*] = crow ; rows
-
     ;; Output structure
 
     clr = [0,1,2,3,4]
@@ -345,9 +336,9 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
     rotst = self->structdef(clr)
 
 
+    ; just to get the number of fields
     ttrans = sdss_read('astrans', run, 1, band=clr[0], rerun=rerun, $
         node=tnode, inc=tinc)
-
     nf = n_elements(ttrans.field)
 
     ptrlist = ptrarr(6)
@@ -360,9 +351,9 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
         rotstruct.field = ttrans.field
 
         rotstruct.fieldid = sdss_photoid(rotstruct.run,   $
-            rotstruct.rerun, $
-            rotstruct.camcol,$
-            rotstruct.field)
+                                         rotstruct.rerun, $
+                                         rotstruct.camcol,$
+                                         rotstruct.field)
 
         FOR ic=0L, nclr-1 DO BEGIN 
 
@@ -393,27 +384,56 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
                 rowcol2eq, trans, node, inc, field, horz[1,*], horz[0,*], hra, hdec
 
                 ;; tangent project
-                ; eta is longitude
-                ;astr.crval = [ceta, clam]
-                ;rd2xy, ceta,clam,astr,cxx,cyy
-                ;rd2xy, veta, vlam, astr, vxx, vyy
-                ;rd2xy, heta, hlam, astr, hxx, hyy
                 astr.crval = [cenra, cendec]
                 rd2xy, cenra, cendec, astr, cenxx, cenyy
                 rd2xy, vra,   vdec,   astr, vxx,   vyy
                 rd2xy, hra,   hdec,   astr, hxx,   hyy
 
-                ;; angle of points in (ra,dec)
+                ; angle of points in (ra,dec)
+                ;
+                ; the shape code treats col direction as x so
+                ; and we set up x to be cols, y to be rows.
+                ;
+                ; cols are in the dec direction., but can't remember sign
+
                 eq_a_ang = atan(vyy, vxx)
                 eq_b_ang = atan(hyy, hxx)
 
-                ; can get outliers sometimes, near the poles?
+                ; use median, can get outliers sometimes
                 mvert[fi] = median(!dpi/2. - eq_a_ang)
                 mhorz[fi] = median(0. - eq_b_ang)
                 angle[fi] = median( [!dpi/2. - eq_a_ang, 0. - eq_b_ang] )
 
+                print,f='("Angle radians: ",f," degrees: ",f)', angle[fi], angle[fi]*180d/!dpi
 
-            ENDFOR ; over fields
+                if keyword_set(debug) then begin
+                    !p.multi=[0,2,2]
+                    pplot, [horz[0,*], vert[0,*]], [horz[1,*],vert[1, *]], psym=8, $
+                        xtitle='cols', ytitle='rows', /iso
+                    pplot, /over, color='red', horz[0,*], horz[1,*], psym=8
+                    pplot, /over, color='blue', vert[0,*], vert[1,*], psym=8
+                    plegend, ['horz','vert'], colors=['red','blue'], psym=8, /right
+
+                    pplot, [hdec,vdec], [hra,vra], psym=8, $
+                        xtitle='dec', ytitle='ra', /iso
+                    pplot, /over, color='red', hdec, hra, psym=8
+                    pplot, /over, color='blue', vdec, vra, psym=8
+
+                    pplot, [hxx,vxx], [hyy,vyy], psym=8, $
+                        xtitle='dec xx', ytitle='ra yy', /iso
+                    pplot, /over, color='red', hxx, hyy, psym=8
+                    pplot, /over, color='blue', vxx, vyy, psym=8
+                    plegend, string(f='("angle: ",f," degrees")', angle[fi]*180d/!dpi), /right
+
+                    !p.multi=0
+                    key=prompt_kbrd("hit a key (q to quit): ")
+                    if key eq 'q' then return
+                endif
+
+
+
+
+            endfor ; over fields
 
 
             rotstruct.hangle[ic] = mhorz
@@ -423,7 +443,7 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
             rotstruct.sin2angle[ic] = sin(2*angle)
 
 
-        ENDFOR ;; over bandpasses
+        endfor ;; over bandpasses
 
         ptrlist[camcol-1] = ptr_new(rotstruct)
 
@@ -437,10 +457,6 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
     rotstruct = combine_ptrlist(ptrlist)
     print,'Writing to output file: ',outfile, f='(a,a)'
     mwrfits, rotstruct, outfile, /create
-    if keyword_set(pgsql) then begin
-        print,'Writing  to pgsql file: ',pgsql_file, f='(a,a)'
-        ascii_write, rotstruct, pgsql_file, /bracket_arrays, append=append
-    endif
 
 
 	; make a plot
@@ -448,17 +464,10 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
     data = mrdfits(outfile, 1)
 	sin2angle = data.sin2angle[2]
 
-	;data.angle = data.angle*180d/!dpi
-
-	;w=where(data.angle[2] gt 20)
-	;data[w].angle[2] = data[w].angle[2] - 180d
-	
-
 	psfile=self->psfile('eq',run,rerun=rerun)
     dir = file_dirname(psfile)
     if not file_test(dir) then file_mkdir, dir
 	begplot,psfile,/color,xsize=15,ysize=8.5,/encap
-	;!p.thick=1
 
 	xrange=[min(data.field), max(data.field)]
 	yrange=[min(sin2angle),max(sin2angle)]
