@@ -19,17 +19,14 @@ END
 
 
 pro sdss_survey_rot::calcrot, system, run, rerun=rerun, $
-                    indir=indir, outdir=outdir, status=status, $
-					pgsql=pgsql
+                    indir=indir, outdir=outdir, status=status
 
     if system eq 'survey' then begin
         self->calcrot_survey, run, rerun=rerun, $
-              indir=indir, outdir=outdir, status=status, $
-              pgsql=pgsql
+              indir=indir, outdir=outdir, status=status
     endif else if system eq 'eq' then begin
         self->calcrot_eq, run, rerun=rerun, $
-              indir=indir, outdir=outdir, status=status, $
-              pgsql=pgsql
+              indir=indir, outdir=outdir, status=status
     endif else message,'Bad system: '+system
 
 end
@@ -314,7 +311,8 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
 
     lrow = 1489-1
     lcol = 2048-1
-    nnr=20.
+    ;nnr=20.
+    nnr=500
     vert=dblarr(2,nnr)
     horz=dblarr(2,nnr)
     ccol = 1023.5
@@ -383,50 +381,49 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
                 rowcol2eq, trans, node, inc, field, vert[1,*], vert[0,*], vra, vdec
                 rowcol2eq, trans, node, inc, field, horz[1,*], horz[0,*], hra, hdec
 
-                ;; tangent project
-                astr.crval = [cenra, cendec]
-                rd2xy, cenra, cendec, astr, cenxx, cenyy
-                rd2xy, vra,   vdec,   astr, vxx,   vyy
-                rd2xy, hra,   hdec,   astr, hxx,   hyy
+                self->eq_project, cenra, cendec, vra, vdec, vxx, vyy, vangle
+                self->eq_project, cenra, cendec, hra, hdec, hxx, hyy, hangle
 
-                ; angle of points in (ra,dec)
-                ;
-                ; the shape code treats col direction as x so
-                ; and we set up x to be cols, y to be rows.
-                ;
-                ; cols are in the dec direction., but can't remember sign
+                ; note minus sign because rotation should be in opposite direction
+                mvert[fi] = -median(vangle-!dpi/2d)
+                mhorz[fi] = -median(hangle)
+                angle[fi] = -median( [vangle-!dpi/2d, hangle] )
 
-                eq_a_ang = atan(vyy, vxx)
-                eq_b_ang = atan(hyy, hxx)
 
-                ; use median, can get outliers sometimes
-                mvert[fi] = median(!dpi/2. - eq_a_ang)
-                mhorz[fi] = median(0. - eq_b_ang)
-                angle[fi] = median( [!dpi/2. - eq_a_ang, 0. - eq_b_ang] )
-
-                print,f='("Angle radians: ",f," degrees: ",f)', angle[fi], angle[fi]*180d/!dpi
 
                 if keyword_set(debug) then begin
                     !p.multi=[0,2,2]
+                    ;!p.multi=[0,0,2]
                     pplot, [horz[0,*], vert[0,*]], [horz[1,*],vert[1, *]], psym=8, $
                         xtitle='cols', ytitle='rows', /iso
                     pplot, /over, color='red', horz[0,*], horz[1,*], psym=8
                     pplot, /over, color='blue', vert[0,*], vert[1,*], psym=8
                     plegend, ['horz','vert'], colors=['red','blue'], psym=8, /right
 
-                    pplot, [hdec,vdec], [hra,vra], psym=8, $
-                        xtitle='dec', ytitle='ra', /iso
-                    pplot, /over, color='red', hdec, hra, psym=8
-                    pplot, /over, color='blue', vdec, vra, psym=8
+                    pplot, [hdec,vdec]-cendec, [hra,vra]-cenra, psym=8, $
+                        xtitle='dec', ytitle='ra', /iso, /ynozero
+                    pplot, /over, color='red', hdec-cendec, hra-cenra, psym=8
+                    pplot, /over, color='blue', vdec-cendec, vra-cenra, psym=8
+                    plegend, string(f='("angle: ",f0.2," deg")', angle[fi]*180d/!dpi), /right
 
                     pplot, [hxx,vxx], [hyy,vyy], psym=8, $
                         xtitle='dec xx', ytitle='ra yy', /iso
                     pplot, /over, color='red', hxx, hyy, psym=8
                     pplot, /over, color='blue', vxx, vyy, psym=8
-                    plegend, string(f='("angle: ",f," degrees")', angle[fi]*180d/!dpi), /right
+                    plegend, string(f='("angle: ",f0.2," deg")', angle[fi]*180d/!dpi), /right
+
+                    tmodelx = replicate(0.0, 100)
+                    tmodely = arrscl(findgen(100), 0.0, 1.0)
+
+                    modelx = tmodelx*cos(angle[fi]) - tmodely*sin(angle[fi])
+                    modely = tmodelx*sin(angle[fi]) + tmodely*cos(angle[fi])
+                    pplot, /over, modelx, modely
+                    
 
                     !p.multi=0
-                    key=prompt_kbrd("hit a key (q to quit): ")
+                    
+                    s=string(f='("Camcol: ",i0," Filter: ",i0," Field: ",i0," Angle radians: ",f0," degrees: ",f0," hit a key: (q to quit)")', camcol, ic, field, angle[fi], angle[fi]*180d/!dpi)
+                    key=prompt_kbrd(s)
                     if key eq 'q' then return
                 endif
 
@@ -496,6 +493,38 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
   return
 END 
 
+pro sdss_survey_rot::eq_project, lon1, lat1, lon2, lat2, x, y, theta
+    D2R = !dpi/180d
+    lat_rad1 = lat1*D2R
+    lat_rad2 = lat2*D2R
+
+    sinlat1 = sin(lat_rad1)
+    coslat1 = cos(lat_rad1)
+
+    sinlat2 = sin(lat_rad2)
+    coslat2 = cos(lat_rad2)
+
+    ;londiff = (lon2 - lon1)*D2R
+    londiff = (lon1 - lon2)*D2R
+    coslondiff = cos( londiff )
+
+    ty = sin(londiff)
+    tx = sinlat1*coslondiff - coslat1*sinlat2/coslat2
+
+    theta = atan(ty, tx) + !dpi
+
+    ; these x,y are rotated 180 relative to dec,ra as x,y
+    ; note cos(pi) = -1
+    ;      sin(pi) = 0
+    cospi = -1d
+    sinpi =  0d
+    x = tx*cospi - ty*sinpi
+    y = tx*sinpi + ty*cospi
+
+    ;theta = atan(y, x) - !dpi/2d
+    ;theta = atan(y, x)
+
+end
 
 
 
