@@ -157,6 +157,8 @@ pro sdss_survey_rot::calcrot_survey, run, rerun=rerun, $
             FOR fi=0L, nf-1 DO BEGIN 
                 field = fields[fi]
 
+                ;print,'field:',field
+
                 ;; convert center (row,col) to (mu,nu) great circle coords
                 rowcol2munu, trans, field, crow, ccol, cmu, cnu
                 ;; convert (mu,nu) to (clambda,ceta) corrected survey coords.
@@ -379,6 +381,8 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
             FOR fi=0L, nf-1 DO BEGIN 
                 field = fields[fi]
 
+                ;print,'field:',field
+
                 ;; convert center (row,col) to (ra,dec)
                 rowcol2munu, trans, field, crow, ccol, cmu, cnu
                 rowcol2eq, trans, node, inc, field, crow, ccol, cenra, cendec
@@ -399,7 +403,7 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
                 rd2xy, vra,   vdec,   astr, vxx,   vyy
                 rd2xy, hra,   hdec,   astr, hxx,   hyy
 
-                ;; angle of points in (lambda,eta)
+                ;; angle of points in (ra,dec)
                 eq_a_ang = atan(vyy, vxx)
                 eq_b_ang = atan(hyy, hxx)
 
@@ -407,6 +411,7 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
                 mvert[fi] = median(!dpi/2. - eq_a_ang)
                 mhorz[fi] = median(0. - eq_b_ang)
                 angle[fi] = median( [!dpi/2. - eq_a_ang, 0. - eq_b_ang] )
+
 
             ENDFOR ; over fields
 

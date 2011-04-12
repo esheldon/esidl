@@ -1644,7 +1644,8 @@ END
 
 
 FUNCTION make_scat::princeton_source_dir
-  dir = concat_dir(esheldon_config("lensinput_dir"),'srcgal/princeton')
+  ;dir = concat_dir(esheldon_config("lensinput_dir"),'srcgal/princeton')
+  dir='~/oh/lensinputs-v1/srcgal/princeton'
   dir = expand_tilde(dir)
   return,dir
 END 
@@ -1723,8 +1724,6 @@ pro make_scat::princeton_rotate2csurvey, $
   wgood=wgood, ngood=ngood, $
   e1pix=e1pix, e2pix=e2pix
 
-  ;rotdir = '/net/cheops1/data7/imaging.local/princeton_surveyrot/'
-  rotdir = '/global/early2/esheldon/princeton_surveyrot'
   nobj = n_elements(struct)
   e1csurvey = replicate(-9999.0, nobj)
   e2csurvey = e1csurvey
@@ -1808,6 +1807,7 @@ FUNCTION make_scat::princeton_stuff_structdef, num
          stripe: 0, $
          objc_flags: 0L,$
          objc_flags2: 0L, $
+         phi_offset:0.0, $
          e1pix: 0.0, $
          e2pix: 0.0, $
          e1eq: 0.0, $
