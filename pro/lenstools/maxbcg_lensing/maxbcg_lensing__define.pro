@@ -1232,6 +1232,21 @@ PRO maxbcg_lensing::plot_profile, $
 
               nsplit = 2
           END 
+          'lambda_cdom_12_2': BEGIN 
+              IF n_elements(bin) EQ 0 THEN BEGIN 
+                  label_charsize=0.5
+                  charsize=1
+              ENDIF 
+              IF n_elements(xlog) EQ 0 THEN xlog=1
+              IF n_elements(ylog) EQ 0 THEN ylog=1
+
+              IF n_elements(ymin) EQ 0 THEN BEGIN 
+                  ymin = 0.03
+              ENDIF 
+
+              nsplit = 2
+          END 
+
 
 
           'sngals6': BEGIN 

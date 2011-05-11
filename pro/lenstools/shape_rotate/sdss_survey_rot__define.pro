@@ -384,7 +384,7 @@ pro sdss_survey_rot::calcrot_eq, run, rerun=rerun, $
                 self->eq_project, cenra, cendec, vra, vdec, vxx, vyy, vangle
                 self->eq_project, cenra, cendec, hra, hdec, hxx, hyy, hangle
 
-                ; note minus sign because rotation should be in opposite direction
+                ; note minus sign because the code is applying -angle...?
                 mvert[fi] = -median(vangle-!dpi/2d)
                 mhorz[fi] = -median(hangle)
                 angle[fi] = -median( [vangle-!dpi/2d, hangle] )

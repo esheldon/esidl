@@ -46,7 +46,10 @@
 ;   - combine_samples, sample1, sample2, dtype, subtype=
 ;       where dtype is 'corr', 'jackknife', etc.
 ;
-;  Plotting routines still need to be generalized
+;  Plotting routines:
+;   - you should inherit from this class and implement
+;       ::plot_profile.
+;   See maxbcg_lensing class for an example
 ;
 ;
 ; MODIFICATION HISTORY:
@@ -3615,7 +3618,7 @@ PRO objshear::plot_ratio, dtype, subtype, subtype_split, nsplit, $
   ENDIF 
 
   IF keyword_set(dops) THEN BEGIN
-      file = self->plotfile(dtype, subtype=subtype, bin=bin, sample=sample, $
+      file = self->plotfile(dtype, subtype=subtype+'_'+subtype_split, bin=bin, sample=sample, $
                             color=incolor, $
                             encapsulated=encapsulated, $
                             /ratio, $
@@ -3623,6 +3626,13 @@ PRO objshear::plot_ratio, dtype, subtype, subtype_split, nsplit, $
 
       begplot, file, $
         encapsulated=encapsulated, color=incolor, landscape=landscape
+
+    thick=2
+    !p.thick=thick
+    !p.charthick=thick
+    !x.thick=thick
+    !y.thick=thick
+
   ENDIF 
 
   IF n_elements(charsize) NE 0 THEN BEGIN 

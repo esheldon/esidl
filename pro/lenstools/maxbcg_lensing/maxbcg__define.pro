@@ -29,12 +29,12 @@ function maxbcg::init, catalog
 
 	if n_elements(catalog) eq 0 then message,'You must initialize the catalog'
 
-	if not in(self->catalogs(), catalog) then begin
-		message,'Unknown catalog '+strn(catalog)
-	endif
 
 	self.catalog = catalog
 	print,'catalog =                      ',catalog
+
+    ; this will check if the catalog name if valid
+    name = self->catname()
 
 	return,1
 
@@ -45,10 +45,6 @@ function maxbcg::type
 end 
 function maxbcg::catalog
   return,self.catalog
-end 
-function maxbcg::catalogs
-  return,['public','dr3','dr4plus','dr406','m2n','n2m','hv1','hv1halo',$
-	  'gmbcg10']
 end 
 
 
@@ -75,52 +71,32 @@ end
 
 function maxbcg::catname, $
                fits=fits, $     ; the original fits file
-               idit=idit, $
                neighbor=neighbor, $
                gals=gals, $
-               spec=spec, $
                centerclass=centerclass
 
     catalog = self->catalog()
 
     case catalog of 
-        'public': name = 'maxbcg_public_catalog'
-        'dr406':  name = 'catalog_full_bcgs'
-        'm2n':    name = 'noref/maxbcg_match_to_noref_3_12_06'
-        'n2m':    name = 'noref/noref_match_to_maxbcg_3_12_06'
+        'public': name = 'maxbcg_public_catalog.fit'
+        'dr406-original':  name = 'catalog_full_bcgs_orig.fit'
+        'dr406':  name = 'catalog_full_bcgs.st'
+        'm2n':    name = 'noref/maxbcg_match_to_noref_3_12_06.fit'
+        'n2m':    name = 'noref/noref_match_to_maxbcg_3_12_06.fit'
         'hv1': begin
             if keyword_set(gals) then begin
-                name = 'hv_v1.00ja_bright_galaxies'
+                name = 'sim/hv_v1.00ja_bright_galaxies.fit'
             endif else begin
-                name = 'hv_v1.00ja_bright_bcgs_cts_z'
+                name = 'sim/hv_v1.00ja_bright_bcgs_cts_z.fit'
             endelse
-            ext = '.fit'
         end
         'hv1halo': begin
-            name = 'hv_v1.00ja_halos'
-            ext='.fit'
+            name = 'sim/hv_v1.00ja_halos.fit'
         end
 		; gmbcg; ngals =10 dr7
-		'gmbcg10': name='gmbcg10'
+		'gmbcg10': name='gmbcg10.fit'
         ELSE: message,'Unknown input sample: '+catalog
     endcase 
-
-    if catalog eq 'public' then begin
-        ext='.fit'
-	endif else if catalog eq 'gmbcg10' then begin
-		if keyword_set(fits) then begin
-			ext='.fits'
-		endif else begin
-			ext='.st'
-		endelse
-    endif else if keyword_set(fits) or keyword_set(centerclass) then begin 
-        ext = '.fit'
-    endif else if keyword_set(spec) then begin 
-        ext = '_spec.st'
-    endif else if n_elements(ext) eq 0 then begin 
-        ext = '.st'
-    endif
-    name = name+ext
 
     if keyword_set(neighbor) then begin 
         name = repstr(name, 'bcgs', 'bcggals')
@@ -130,32 +106,24 @@ function maxbcg::catname, $
 
 
     dir=self->catdir()
-    name = concat_dir(dir,name)
+    name = path_join(dir,name)
     return,name
 
 end 
 
 function maxbcg::get, gals=gals, neighbor=neighbor, centerclass=centerclass, $
-        spec=spec, fits=fits, $
         columns=columns, rows=rows, nrows=nrows, _extra=_extra
 
-    file = self->catname(gals=gals, neighbor=neighbor, centerclass=centerclass,$
-        spec=spec, fits=fits)
+    file = self->catname(gals=gals, neighbor=neighbor, centerclass=centerclass)
     print,'Reading file: '+file
 
-    cat = self->catalog()
-
-    if stregex(file, '.*\.fits?$',/bool) then begin
-        bcg = mrdfits(file, 1, columns=columns, rows=rows, _extra=_extra)
-    endif else if stregex(file, '.*\.st$',/bool) then begin
-        bcg = read_idlstruct(file, columns=columns, rows=rows, _extra=_extra)
+    if in(['dr406'],self->catalog()) then begin
+        cat = read_idlstruct(file, columns=columns, rows=rows, _extra=_extra)
     endif else begin
-        message,'Do not know how to read files of this type: '+ntostr(file)
+        cat = mrdfits(file, 1, columns=columns, rows=rows, _extra=_extra)
     endelse
-
-    nrows = n_elements(bcg)
-
-    return,bcg
+    nrows = n_elements(cat)
+    return,cat
 
 end 
 
@@ -221,9 +189,9 @@ function maxbcg::add_tags, struct
   val_id = lindgen(10)*2
   newtagdef[val_id] = '-9999.0'
 
-  ;; long int for vagc_index
   newtagdef = ['-9999L', newtagdef]
-  add_tags, struct, newtags, newtagdef, newstruct
+
+  newstruct = struct_addtags(struct, newtags, newtagdef)
 
   return, newstruct
 
@@ -377,183 +345,173 @@ end
 
 
 
-;; Redshift cuts, rename tags, calculate new stuff, write as .st file
+;; Redshift cuts, rename tags, calculate new stuff
 pro maxbcg::convert, overwrite=overwrite
 
+    mb=obj_new('maxbcg',self.catalog+'-original')
 
-  fitsfile = self->catname(/fits)
-  stfile   = self->catname()
-  nfitsfile  = self->catname(/fits, /neigh)
-  nstfile    = self->catname(/neigh)
+    origfile = mb->catname()
+    norigfile  = mb->catname(/neigh)
 
-  print,'fits file: ',fitsfile
-  print,'new st file: ',stfile
-  print,'neighbor file: ',nfitsfile
-  print,'new neighbor file: ',nstfile
+    stfile   = self->catname()
+    nstfile    = self->catname(/neigh)
 
-  orig = mrdfits(fitsfile, 1)
-  neigh = mrdfits(nfitsfile, 1)
+    print,'original file: ',origfile
+    print,'new st file: ',stfile
+    print,'neighbor original file: ',norigfile
+    print,'new neighbor file: ',nstfile
 
-  norig = n_elements(orig)
+    orig = mrdfits(origfile, 1)
+    neigh = mrdfits(norigfile, 1)
 
-  print
-  print,'Making redshift cuts'
-  keep = self->zselect(orig.photoz_cts, nkeep)
-  orig = orig[keep]
+    norig = n_elements(orig)
 
+    print
+    print,'Making redshift cuts'
+    keep = self->zselect(orig.photoz_cts, nkeep)
+    orig = orig[keep]
 
-  ;; Color of BCG NOT assuming lrg shape
-  ;print
-  ;print,'Getting kgmr,krmi NOT assuming LRG'
-  ;ft = self->fake_tsobj(orig)
-  ;kc = sdss_kcorrect(orig.photoz_cts, $
-  ;                   tsobj=ft, flux='model', absmag=absmag, amivar=amivar, $
-  ;                   band_shift=self->band_shift(), omega0=0.27, omegal0=0.73)
+    print,'Keeping '+ntostr(nkeep)+'/'+ntostr(norig)
 
 
+    if not tag_exist(orig[0], 'clambda') then begin 
+        print
+        print,'Adding clambda/ceta'
+
+        orig = self->add_csurvey(temporary(orig))
+    endif 
+
+    if self->catalog() ne 'dr406' then begin 
+        message,'Check to see if this program works for catalog: '+self->catalog()
+    endif 
+
+    oldtags = $
+        ['id', $
+        'ngals_r200','tngals_r200',$
+        'i_lum', 'r_lum', $
+        'mean_kgr', 'mean_kri', $
+        'med_kgr', 'med_kri', $
+        'kgmr', 'krmi']
+    newtags = $
+        ['bcg_id', $
+        'ngals200',  'tngals200',  $
+        'ilum200','rlum200', $
+        'mean_kgmr200','mean_krmi200',$
+        'med_kgmr200','med_krmi200',$
+        'bcg_kgmr','bcg_krmi']
+
+    print
+    newstruct = rename_tags(temporary(orig), oldtags, newtags)
+
+    ;; remove run,rerun,camcol,field since ben overwrite id with 
+    ;; Some of these will get added back in, just for clarity of code
+    rmtags = ['run','rerun','camcol','field',$
+        'bcg_rlum', 'bcg_ilum', $
+        'rlum200', 'ilum200', $
+        'bcg_kgmr', 'bcg_krmi', $
+        'med_kgmr200', 'med_krmi200', $
+        'mean_kgmr200', 'mean_krmi200',$
+        'spectro_r_lum','spectro_i_lum', $
+        'spectro_bcg_rlum', 'spectro_bcg_ilum']
+    print
+    print,'Removing tags: ',rmtags
+    newstruct = remove_tags(temporary(newstruct), rmtags)
+
+    print
+    print,'Adding tags'
+    newstruct = self->add_tags(temporary(newstruct))
+
+    ;; Match to spectra
+    print
+    print,'Matching to lss spectro sample'
+    match_struct = self->match2lss(newstruct)
+    w = match_struct.mbcg
+    newstruct.bcg_spec_z = -9999.0
+    newstruct[w].bcg_spec_z = match_struct.z
+    newstruct[w].bcg_vagc_index = match_struct.mlss
+
+    ;; Re-index to a unique bcg_id
+    print
+    print,'Re-indexing'
+    maxbcg_reindex, newstruct, neigh
+
+    ;; Add center classification "kde_class"
+    self->add_centerclass, newstruct
+
+    ;; k-corrected stuff.  Assumes lrg for all
+    self->add_kcorrect, newstruct, neigh
+
+    ;; Color of BCG NOT assuming lrg shape
+    print
+    print,'Getting kgmr,krmi NOT assuming LRG'
+    ft = self->fake_tsobj(newstruct)
+    ; some problem with common blocks, need to call a separate one
+    kc = self->sdss_kcorrect(newstruct.photoz_cts, $
+        tsobj=ft, flux='model', absmag=absmag, amivar=amivar, $
+        band_shift=self->band_shift(), omega0=0.27, omegal0=0.73)
+
+    newstruct.bcg_kgmr = reform( absmag[1,*] - absmag[2,*] )
+    newstruct.bcg_kgmr_ivar = reform( 1.0/(1.0/amivar[1,*] + 1.0/amivar[2,*] ) )
+    newstruct.bcg_krmi = reform( absmag[2,*] - absmag[3,*] )
+    newstruct.bcg_krmi_ivar = reform( 1.0/(1.0/amivar[2,*] + 1.0/amivar[3,*] ) )
+
+    delvarx, ft, kc, absmag, amivar
+    print
+    print,'Re-ordering tags'
+    front_tags = $
+        ['bcg_id', $
+        'photoid', $
+        'stripe', $
+        'ra','dec','clambda','ceta',$
+        $
+        'z','photoz_cts','photoz_z', 'photoz_zerr', $
+        $
+        'ngals','ngals200',$
+        $
+        'bcg_iabsmag',       'bcg_iabsmag_ivar', $
+        'bcg_ilum',          'bcg_ilum_ivar', $
+        'bcg_kgmr', 'bcg_kgmr_ivar', $
+        'bcg_krmi', 'bcg_krmi_ivar', $
+        'bcg_vagc_index', $
+        'bcg_spec_z', $
+        'bcg_spec_iabsmag',  'bcg_spec_iabsmag_ivar', $
+        'bcg_spec_ilum',     'bcg_spec_ilum_ivar', $
+        $
+        'iabsmag200',        'iabsmag200_ivar', $
+        'ilum200',           'ilum200_ivar', $
+        'spec_iabsmag200',   'spec_iabsmag200_ivar', $
+        'spec_ilum200',      'spec_ilum200_ivar', $
+        $
+        'cmodel_counts', $
+        'imag', $
+        'gmr', 'gmr_err', 'rmi', 'rmi_err', $
+        'objc_prob_gal', $
+        'corrselect_flags', $
+        'maskflags','edge','lrg_flags']
+
+    newstruct = reorder_tags( temporary(newstruct), front_tags )
 
 
-  print,'Keeping '+ntostr(nkeep)+'/'+ntostr(norig)
+    if not keyword_set(overwrite) and fexist(stfile) then begin 
+        key = ''
+        read,'File '+stfile+' exists. Overwrite? (y/n) ', key
+        if strlowcase(key) ne 'y' then return
 
+    endif 
 
-  if not tag_exist(orig[0], 'clambda') then begin 
-      print
-      print,'Adding clambda/ceta'
-
-      orig = self->add_csurvey(temporary(orig))
-  endif 
-
-  if self->catalog() ne 'dr406' then begin 
-      message,'Check to see if this program works for catalog: '+self->catalog()
-  endif 
-
-  oldtags = $
-    ['id', $
-     'ngals_r200','tngals_r200',$
-     'i_lum', 'r_lum', $
-     'mean_kgr', 'mean_kri', $
-     'med_kgr', 'med_kri', $
-     'kgmr', 'krmi']
-  newtags = $
-    ['bcg_id', $
-     'ngals200',  'tngals200',  $
-     'ilum200','rlum200', $
-     'mean_kgmr200','mean_krmi200',$
-     'med_kgmr200','med_krmi200',$
-     'bcg_kgmr','bcg_krmi']
-  
-  print
-  newstruct = rename_tags(temporary(orig), oldtags, newtags)
-  
-  ;; remove run,rerun,camcol,field since ben overwrite id with 
-  ;; Some of these will get added back in, just for clarity of code
-  rmtags = ['run','rerun','camcol','field',$
-            'bcg_rlum', 'bcg_ilum', $
-            'rlum200', 'ilum200', $
-            'bcg_kgmr', 'bcg_krmi', $
-            'med_kgmr200', 'med_krmi200', $
-            'mean_kgmr200', 'mean_krmi200',$
-            'spectro_r_lum','spectro_i_lum', $
-            'spectro_bcg_rlum', 'spectro_bcg_ilum']
-  print
-  print,'Removing tags: ',rmtags
-  newstruct = remove_tags(temporary(newstruct), rmtags)
-  
-  print
-  print,'Adding tags'
-  newstruct = self->add_tags(temporary(newstruct))
-
-  ;; Match to spectra
-  print
-  print,'Matching to lss spectro sample'
-  match_struct = self->match2lss(newstruct)
-  w = match_struct.mbcg
-  newstruct.bcg_spec_z = -9999.0
-  newstruct[w].bcg_spec_z = match_struct.z
-  newstruct[w].bcg_vagc_index = match_struct.mlss
-
-  ;; Re-index to a unique bcg_id
-  print
-  print,'Re-indexing'
-  maxbcg_reindex, newstruct, neigh
-
-  ;; Add center classification "kde_class"
-  self->add_centerclass, newstruct
-
-  ;; k-corrected stuff.  Assumes lrg for all
-  self->add_kcorrect, newstruct, neigh
-
-  ;; Color of BCG NOT assuming lrg shape
-  print
-  print,'Getting kgmr,krmi NOT assuming LRG'
-  ft = self->fake_tsobj(newstruct)
-  ; some problem with common blocks, need to call a separate one
-  kc = self->sdss_kcorrect(newstruct.photoz_cts, $
-                     tsobj=ft, flux='model', absmag=absmag, amivar=amivar, $
-                     band_shift=self->band_shift(), omega0=0.27, omegal0=0.73)
-
-  newstruct.bcg_kgmr = reform( absmag[1,*] - absmag[2,*] )
-  newstruct.bcg_kgmr_ivar = reform( 1.0/(1.0/amivar[1,*] + 1.0/amivar[2,*] ) )
-  newstruct.bcg_krmi = reform( absmag[2,*] - absmag[3,*] )
-  newstruct.bcg_krmi_ivar = reform( 1.0/(1.0/amivar[2,*] + 1.0/amivar[3,*] ) )
-
-  delvarx, ft, kc, absmag, amivar
-  print
-  print,'Re-ordering tags'
-  front_tags = $
-    ['bcg_id', $
-     'photoid', $
-     'stripe', $
-     'ra','dec','clambda','ceta',$
-     $
-     'z','photoz_cts','photoz_z', 'photoz_zerr', $
-     $
-     'ngals','ngals200',$
-     $
-     'bcg_iabsmag',       'bcg_iabsmag_ivar', $
-     'bcg_ilum',          'bcg_ilum_ivar', $
-     'bcg_kgmr', 'bcg_kgmr_ivar', $
-     'bcg_krmi', 'bcg_krmi_ivar', $
-     'bcg_vagc_index', $
-     'bcg_spec_z', $
-     'bcg_spec_iabsmag',  'bcg_spec_iabsmag_ivar', $
-     'bcg_spec_ilum',     'bcg_spec_ilum_ivar', $
-     $
-     'iabsmag200',        'iabsmag200_ivar', $
-     'ilum200',           'ilum200_ivar', $
-     'spec_iabsmag200',   'spec_iabsmag200_ivar', $
-     'spec_ilum200',      'spec_ilum200_ivar', $
-     $
-     'cmodel_counts', $
-     'imag', $
-     'gmr', 'gmr_err', 'rmi', 'rmi_err', $
-     'objc_prob_gal', $
-     'corrselect_flags', $
-     'maskflags','edge','lrg_flags']
-
-  newstruct = reorder_tags( temporary(newstruct), front_tags )
-
-
-  if not keyword_set(overwrite) and fexist(stfile) then begin 
-      key = ''
-      read,'File '+stfile+' exists. Overwrite? (y/n) ', key
-      if strlowcase(key) ne 'y' then return
-
-  endif 
-
-  print,'Writing file: ',stfile
-  write_idlstruct, newstruct, stfile
+    print,'Writing file: ',stfile
+    write_idlstruct, newstruct, stfile
 
 
 
-  if not keyword_set(overwrite) and fexist(nstfile) then begin 
-      key = ''
-      read,'File '+nstfile+' exists. Overwrite? (y/n) ', key
-      if strlowcase(key) ne 'y' then return
-  endif 
+    if not keyword_set(overwrite) and fexist(nstfile) then begin 
+        key = ''
+        read,'File '+nstfile+' exists. Overwrite? (y/n) ', key
+        if strlowcase(key) ne 'y' then return
+    endif 
 
-  print,'Writing neighbor file: ',nstfile
-  write_idlstruct, neigh, nstfile
+    print,'Writing neighbor file: ',nstfile
+    write_idlstruct, neigh, nstfile
 
 
 end 
@@ -4126,6 +4084,52 @@ function maxbcg::lambda_z_where_string, nbin, labels=labels
 
 end 
 
+; split in half by cdom, bcg dominance
+function maxbcg::lambda_cdom2_where_string, nbin, labels=labels
+
+  on_error, 2
+  if n_elements(nbin) eq 0 then begin 
+      print,'-Syntax: ws = mb->lambda_cdom2_where_string(nbin)'
+      print
+      message,'Halting'
+  endif 
+
+  delvarx, labels
+  lambda_nbin = nbin/2
+  self->lambda_bins, lambda_nbin, lowlim, highlim
+
+  delvarx, labels
+  for i=0L, lambda_nbin-1 do begin 
+
+      tstring = $
+        '(struct.lambda  ge '+ntostr(lowlim[i])+') and '+$
+        '(struct.lambda  le '+ntostr(highlim[i])+') and '+$
+        '(struct.cdom gt 0) and (struct.cdom lt 0.97)'
+      add_arrval, tstring, where_string
+
+
+      tlabel = self->lambda_string(lowlim[i], highlim[i])
+
+      tlabel = tlabel + ' cdom < 0.97'
+      add_arrval, tlabel, labels
+
+      tstring = $
+        '(struct.lambda  ge '+ntostr(lowlim[i])+') and '+$
+        '(struct.lambda  le '+ntostr(highlim[i])+') and '+$
+        '(struct.cdom gt 0) and (struct.cdom ge 0.97)'
+      add_arrval, tstring, where_string
+
+      tlabel = 'cdom > 0.97'
+      add_arrval, tlabel, labels
+
+
+  endfor 
+  return,where_string
+
+
+end 
+
+
 
 
 
@@ -5149,42 +5153,43 @@ end
 
 
 function maxbcg::subtype_nbin, subtype
-  if n_elements(subtype) eq 0 then begin 
-      message,'-Syntax: nbin=mb->nbin(subtype)'
-  endif 
-  CASE subtype OF
-	  'sngals6': return, 6
-      'ngals12': return,12
+    if n_elements(subtype) eq 0 then begin 
+        message,'-Syntax: nbin=mb->nbin(subtype)'
+    endif 
+    CASE subtype OF
+        'sngals6': return, 6
+        'ngals12': return,12
 
-      'ngals200_8': return, 8
-      'ngals200_12': return, 12
-      'ngals200_ilum200_12_2': return,24
-      'ngals200_z_12_2': return, 24
-	  
-	  'lambda12': return, 12
-      'lambda_z_12_2': return, 24
+        'ngals200_8': return, 8
+        'ngals200_12': return, 12
+        'ngals200_ilum200_12_2': return,24
+        'ngals200_z_12_2': return, 24
+        'lambda_cdom_12_2': return, 24
 
-      'ilum200_12': return, 12
-      'ilum200_16': return, 16
-      'ilum200_ngals200_16_2': return,32
-      'ilum200_z_16_2': return,32
-      'ilum200_bcg_kgmr_16_2': return, 32
+        'lambda12': return, 12
+        'lambda_z_12_2': return, 24
 
-      'lx2': return,2
+        'ilum200_12': return, 12
+        'ilum200_16': return, 16
+        'ilum200_ngals200_16_2': return,32
+        'ilum200_z_16_2': return,32
+        'ilum200_bcg_kgmr_16_2': return, 32
 
-      'zbin4': return, 4
+        'lx2': return,2
 
-      'centerclass5': return, 5
-      'centerclass5_alt3': return, 3
-      'centerclass6': return, 6
-      'centerclass_alt2': return, 2
+        'zbin4': return, 4
 
-      'lxid-all': return, 1
-      'lxid-sig3': return, 1
-      'lxid-sig5': return, 1
-      'lxid-noras': return, 1
-      ELSE: message,'Unknown subtype: '+strn(subtype)
-  endcase 
+        'centerclass5': return, 5
+        'centerclass5_alt3': return, 3
+        'centerclass6': return, 6
+        'centerclass_alt2': return, 2
+
+        'lxid-all': return, 1
+        'lxid-sig3': return, 1
+        'lxid-sig5': return, 1
+        'lxid-noras': return, 1
+        ELSE: message,'Unknown subtype: '+strn(subtype)
+    endcase 
 end 
 
 function maxbcg::select_type, subtype
@@ -5240,6 +5245,9 @@ function maxbcg::where_string, subtype, nbin=nbin, labels=labels, nodisplay=nodi
 		end
 		'lambda_z_12_2': begin 
 			return, self->lambda_z_where_string(nbin, labels=labels)
+		end 
+		'lambda_cdom_12_2': begin 
+			return, self->lambda_cdom2_where_string(nbin, labels=labels)
 		end 
 
 
